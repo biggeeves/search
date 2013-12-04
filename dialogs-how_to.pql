@@ -1,0 +1,82 @@
+PROCEDURE      DIALOGS.HOW_TO:T  (157471,49891)  |Last amended Dec 04, 2013,13:51:31
+| Creator:   Greg Neils
+| Created:   2006
+| Reason:    How to work the Search Function.
+| Version:   2.1
+
+program
+. HELPTXT$=1
+. MYCLOSE =2
+. BLNKTXT$=3
+. dialog "Instructions for using Search."
+. postype 1
+. text   HELPTXT$ 0, 408, 0, 567,1
+. button MYCLOSE 410,100,80, 1 "Close"
+. text   BLNKTXT$ 0, 0, 0, 0,1
+|
+. initial
+. string * 300 txtline1
+. set item font HELPTXT$ 0,0,0,0,"Lucida Console"
+. append line HELPTXT$,'<b>Schema:</b><br>' HTML
+. append line HELPTXT$,'  Press this and a codebook will be created for selected table.'
+. append line HELPTXT$,'  If you dont know a variable name, you can find it here.'
+. append line HELPTXT$,''
+. append line HELPTXT$,'<b>Keys:</b><br>' HTML
+. append line HELPTXT$,'  Keys are used to specify exact records.'
+. append line HELPTXT$,'  Keys will show you the most important information about your table.... how it is constructed'
+. append line HELPTXT$,''
+. append line HELPTXT$,'<b>Spread Sheet:</b><br>' HTML
+. append line HELPTXT$,'  Create an HTML table that you can view.  It uses the current selected table.'
+. append line HELPTXT$,'  Due to the limitation of HTML it is slow.'
+. append line HELPTXT$,''
+. append line HELPTXT$,'<b>Frequencies:</b><br>' HTML
+. append line HELPTXT$,'  It produces very useful basic statistics."'
+. append line HELPTXT$,'  If you want to know how often something happened use frequencies."'
+. append line HELPTXT$,''
+. append line HELPTXT$,'<b>Cross Tabs:</b><br>' HTML
+. append line HELPTXT$,'  Compare 2 variables against eachother. '
+. append line HELPTXT$,'  For example you might want to compare the Variable AGE against the variable SEX. '
+. append line HELPTXT$,''
+. append line HELPTXT$,'<b>Basic Query:</b><br>' HTML
+. append line HELPTXT$,'  Find some very specific information.  Provide the criteria and it will show you everything that matches.'
+. append line HELPTXT$,'  "Skip" means that you only want to see 1 variable.'
+. append line HELPTXT$,'  "Or" means that you want to see 2 variables when 1 or the other has a certain value.'
+. append line HELPTXT$,'  "And" means that the variables must have the value you specified.  See also "Limit to:"'
+. append line HELPTXT$,''
+. append line HELPTXT$,'<b>Complex Query:</b><br>' HTML
+. append line HELPTXT$,'  Search for data in up to 13 variables and across 3 tables.'
+. append line HELPTXT$,'  "And" and "Or" can be used on each variable.  It is OK to leave the second part blank.'
+. append line HELPTXT$,''
+. append line HELPTXT$,'<b>Find Text:</b><br>' HTML
+. append line HELPTXT$,'  How is this different from Find Data?'
+. append line HELPTXT$,'  You dont have to specify a variable that it is in.'
+. append line HELPTXT$,'  For example: You have a name but you can not remember if it is a subject, contact, or Dr.'
+. append line HELPTXT$,'  It can search every variable in the table or the entire database.  '
+. append line HELPTXT$,'  Searching the entire database is very complicated and takes longer.'
+. append line HELPTXT$,'  Select "Exact Match" if you only want those items that match your text exactly.  '
+. append line HELPTXT$,' '
+. append line HELPTXT$,'  Search the DB schema too!  Select "Database codebook" and you’ll find variables and labels in the Schema'
+. append line HELPTXT$,'  Search the DB schema too!  Find the variable you are looking for.'
+. append line HELPTXT$,''
+. append line HELPTXT$,'<b>Limit to: "Limit report to:"</b><br>' HTML
+. append line HELPTXT$,'  Turn this on if you want to specify a selection criteria that happens before any of the searches.'
+. append line HELPTXT$,'  For example: If you want to do a cross tabs between sex and race, and '
+. append line HELPTXT$,'  you only want people over the age of 40 in the demographics table.'
+. append line HELPTXT$,'  The selection criteria would be something like this "Demog, Age > 40".'
+. append line HELPTXT$,'  If anyone is over the age of 40, they will be in the cross tabs.'
+. append line HELPTXT$,''
+. append line HELPTXT$,'<b>Close:</b><br>' HTML
+. append line HELPTXT$,'  Yep, It does exactly what you would expect.'
+. append line HELPTXT$,''
+. focus item BLNKTXT$
+. end initial
+|
+. messages all HID,HPOS,HDC
+. ifthen (HID eq MYCLOSE)
+.   exit message
+. endif
+. if (HID = 0) exit message
+. end messages
+. end dialog
+end program
+END PROCEDURE

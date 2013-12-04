@@ -1,0 +1,291 @@
+PROCEDURE      INCLUDES.M_LIST:T  (157471,49286)  |Last amended Dec 04, 2013,13:41:26
+| Creator:   Greg Neils
+| Created:   Sometime in 2006
+| Version:   11.7.2013
+
+| Summary:   Send criteria to this file in the format below.  It will search the database for things that match the criteria
+| Output:    HTML file
+
+c VTYPE  example: num = VTYPE (  rtnum , varname_str  )   Note that VARNAME_STR is a STRING!
+ Returns an integer code representing the type of the variable, wv:
+ 1 = string
+ 2 = categorical
+ 3 = date
+ 4 = time
+ 5 = integer
+ 6 = real ( single precision )
+ 7 = real ( double precision )
+ 8 = scaled variable
+
+program
+x = globaln('G_CASED' , dbtype(0))
+end program
+
+retrieval progress CRWARN| <1>=varname of CASEID <2> = Rec type#    <3> = VAR1NAME    <4> = SIGN1 <5> = VALUE1
+                         | <6> = ANDOR1                             <7> = VAR2NAME   <8> = SIGN2 <9> = value2
+                         | <10>  =  SEL_REC#    <11> = SEL_VAR    <12> = SEL_SIGN     <13> = SEL_ED
+
+                         | 1 = SUMMARY 2 = SHOWMATC from the general2 member assigments of dialog items
+                         | first comes frequencies, then comes matches
+print back noremarks nocommands
+string  *  250  RESULTS SHOWKEYS TOPTEXT
+string  *   32  array KEYINFO ( 20 )    | Might have to expand this for SIRXS
+integer *    4  MISVAL1 MISVAL2       | Hold which missing value it is.
+integer *    1  DUMB_N#               | Opens HTML browser
+integer *    1  MISVALX               | Selection criteria missing value
+integer *    4  COUNTS                | Total that meets all criterias
+integer *    1  PASSTEST              | Used in various selection to meet criteria.  Becareful when changing.
+string  *   25  DATESTR               | What is the format of the Date
+string  *   25  TIMESTR               | What is the format of the Time
+
+set MISVAL1  MISVAL2 ( -1 )             | It changes look for missing values ( 0-3 )
+set COUNTS   ( 0 )
+c write 'start: <1> <2> <3> <4> <5> <6> <7> <8> <9> end'|  if you want to see what it is being passed uncomment this line
+c note that vformat( <2>,'<3>' ) does not work because it can return an I12! and that is not what we want with an I1
+
+open seach_html   /write lrecl = 600
+write ( seach_html ) '<html>'
+write ( seach_html ) '<head>'
+write ( seach_html ) '<title>'
+write ( seach_html ) 'Results for your search'
+write ( seach_html ) '</title>'
+write ( seach_html ) '</head>'
+write ( seach_html ) '<body>'
+write ( seach_html ) '<table border=1 width="100%"><tr><td>'
+write ( seach_html ) '  <table  width="100%" border=0 bgcolor="#FFFFCC">'
+write ( seach_html ) '    <tr><td><p><big>Generated on ' [datec( today( 0 ),'mm/dd/yy' )]  ' at ' [timec( now( 0 ),'hh:mm' )] 'by ' [sglobal( 'USERA' )]  ' and the D.C.C.</big></p></td></tr>'
+TOPTEXT = pack( varlabsc( <2>,'<3>' ) )  + ' <4> <5>'
+ifthen ( '<6>' ne 'Skip' )
+. TOPTEXT = TOPTEXT  +  ' <6> '  +  pack( varlabsc( <2>,'<7>' ) )  +  ' <8> <9>'
+endif
+write ( seach_html ) '    <tr><td><p><b><big>Search for: ' TOPTEXT '</big></b></p></td></tr>'
+write ( seach_html ) '    <tr><td><p><big>Table ' [pack( recname( <2> ) )] '<b> '  [pack( recdoc( <2>,1 ) )] '</big></p></td></tr>'
+write ( seach_html ) '    <tr><td><big>A SUMMARY OF THE RESULTS IS AT THE END OF THIS REPORT</big></td></tr>'
+ifthen ( '<13>' ne 'GREG WAS HERE' ) |no selection criteria was specified
+. write ( seach_html ) '    <tr><td bgcolor ="#CCCCCC"> Selection criteria: ' [recname( <10> )]  ': <11>  <12>  <13>  </td></tr>'
+endif
+write ( seach_html ) '    <tr><td><hr></td></tr>'
+write ( seach_html ) '  </table> '
+
+write ( seach_html ) '  <table border=1 CELLPADDING=10 CELLSPACING=0>'
+write ( seach_html ) '    <tr>'
+write ( seach_html ) '    <td bgcolor="#CCCCCC"><b>Identifiers<b></td>'
+write ( seach_html ) '    <td bgcolor="#CCCCCC"><b><3></b></td>'
+if ( '<6>' ne 'Skip' ) write ( seach_html ) '    <td bgcolor="#CCCCCC"><b><7></b></td>'
+write ( seach_html ) '    </tr>'
+
+if ( miss( <10>,'<11>',1 ) eq '<13>' ) MISVALX = 1
+if ( miss( <10>,'<11>',2 ) eq '<13>' ) MISVALX = 2
+if ( miss( <10>,'<11>',3 ) eq '<13>' ) MISVALX = 3
+if ( '<13>' eq '' ) MISVALX = 0  |NOTE This Must come after the assigning of missing value loop ( n=0,3 )
+
+for NMISSVAL = 1,3
+. if ( miss( <2>,'<3>',NMISSVAL ) eq '<5>' ) MISVAL1 = NMISSVAL
+. if ( miss( <2>,'<7>',NMISSVAL ) eq '<9>' ) MISVAL2 = NMISSVAL
+end for
+if ( '<5>' eq '' ) MISVAL1 = 0  |NOTE This Must come after the assigning of missing value loop ( n=0,3 )
+if ( '<9>' eq '' ) MISVAL2 = 0
+cif eq 1,0<G_CASED>
+process cases |COUNT = 100
+cif end
+| SELECTION CRITERIA
+. ifthen ( '<13>' ne 'GREG WAS HERE' ) |no selection criteria was specified
+.   PASSTEST = 0
+.   process rec <10>
+.     ifthen ( vtype( <10>,'<11>' ) eq 1 )  |string
+.       if ( varget( '<11>' ) <12> '<13>' )  PASSTEST = 1
+.     elseif ( vtype( <10>,'<11>' ) eq 2 )  |category
+.       if ( varget( '<11>' ) <12> '<13>' )  PASSTEST  = 1
+.     elseif ( vtype( <10>,'<11>' ) eq 3 )  |date
+.       ifthen ( cdate( varget( '<11>' ),DATESTR ) <12> cdate( '<13>',DATESTR ) )
+.         PASSTEST  = 1
+.       endif
+.     elseif ( vtype( <10>,'<11>' ) eq 4 )  |time
+.       ifthen ( ctime( varget( '<11>' ),TIMESTR ) <12> ctime( '<13>',TIMESTR ) )
+.         PASSTEST  = 1
+.       endif
+.     else
+.       if ( numbr( varget( '<11>' ) ) <12> numbr( '<13>' ) ) PASSTEST  = 1
+.     endif
+.     ifthen ( exists( <11> ) eq 0 )
+.       if ( misnum( <11> ) eq MISVALX ) PASSTEST = 1       |They have already seen the alert "Missing values must use '='"
+.     endif
+.   end rec
+
+cif eq 1,0<G_CASED>
+c only for case structured databases
+.   if ( PASSTEST eq 0 ) NEXT CASE  |All or nothing you might write~!
+cif end
+. endif
+| END SELECTION CRITERIA
+
+. process rec <2>
+.   PASSTEST = 0
+.   SHOWKEYS = ''
+c
+c show list meeting criteria
+c  variable 1
+c    first test if missing value
+.    ifthen ( MISVAL1 ne -1 )   |looking for missing value
+.      ifthen ( misnum( <3> ) eq MISVAL1 )  |check missing values
+.        ifthen ( '<6>' eq 'And' )
+.          PASSTEST = PASSTEST  +  1    | User wanted an 'AND"
+.        elseif ( '<6>' eq 'Or' or 'Skip' )
+.          PASSTEST = 2    | User wanted an 'OR'
+.        endif
+.      endif
+.    endif
+.    ifthen ( vtype( <2>,'<3>' ) eq 1 or 2 )    |string or categorical
+.      ifthen ( pack( upper( varget( '<3>' ) ) ) <4> upper( '<5>' ) )
+.        ifthen ( '<6>' eq 'And' )
+.          PASSTEST = PASSTEST  +  1    | User wanted an 'AND"
+.        elseif ( '<6>' eq 'Or' or 'Skip' )
+.          PASSTEST =         2    | User wanted an 'OR'
+.        endif
+.      endif
+.    endif
+.    ifthen ( vtype( <2>,'<3>' ) eq 3 ) |dates
+.      DATESTR = datemap ( <2>, '<3>' )
+.      ifthen ( cdate( varget( '<3>' ),DATESTR ) <4> cdate( '<5>',datemap( <2>,'<3>' ) ) )
+.        ifthen ( '<6>' eq 'And' )
+.          PASSTEST = PASSTEST  +  1    | User wanted an 'AND"
+.        elseif ( '<6>' eq 'Or' or 'Skip' )
+.          PASSTEST = 2             | User wanted an 'OR'
+.        endif
+.      endif
+.    endif
+.    ifthen ( vtype( <2>,'<3>' ) eq 4 ) |TIMES
+.      TIMESTR = timemap ( <2>, '<3>' )
+.      ifthen ( ctime( varget( '<3>' ),TIMESTR ) <4> ctime( '<5>',timemap( <2>,'<3>' ) ) )
+.        ifthen ( '<6>' eq 'And' )
+.          PASSTEST = PASSTEST  +  1    | User wanted an 'AND"
+.        elseif ( '<6>' eq 'Or' or 'Skip' )
+.          PASSTEST = 2             | User wanted an 'OR'
+.        endif
+.      endif
+.    endif
+.    ifthen ( vtype( <2>,'<3>' ) eq 5 or 6 or 7 ) |numbers
+.      ifthen ( numbr( varget( '<3>' ) ) <4> numbr( '<5>' ) )
+.        ifthen ( '<6>' eq 'And' )
+.          PASSTEST = PASSTEST  +  1    | User wanted an 'AND"
+.        elseif ( '<6>' eq 'Or' or 'Skip' )
+.          PASSTEST =         2    | User wanted an 'OR'
+.        endif
+.      endif
+.    endif
+c variable 2
+c is missing values
+.    ifthen ( MISVAL2 ne -1 )   |looking for missing value
+.        ifthen ( misnum( <7> ) eq MISVAL2 )
+.          ifthen ( '<6>' eq 'And' )
+.            PASSTEST = PASSTEST  +  1    | User wanted an 'AND"
+.          elseif ( '<6>' eq 'Or' or 'Skip' )
+.            PASSTEST =         2    | User wanted an 'OR'
+.          endif
+.        endif
+.    endif
+c is normal value
+.    ifthen ( '<6>' NE 'Skip' )
+.      ifthen ( vtype( <2>,'<7>' ) eq  1 or 2 )
+.        ifthen ( pack( upper( varget( '<7>' ) ) ) <8> upper( '<9>' ) )
+.          ifthen ( '<6>' eq 'And' )
+.             PASSTEST = PASSTEST + 1   | User wanted an 'AND"
+.          elseif ( '<6>' eq 'Or' )
+.            PASSTEST = 2             | User wanted an 'OR'
+.          endif
+.        endif
+.      endif
+.      ifthen ( vtype( <2>,'<7>' ) eq  5 or 6 or 7 )
+.        ifthen ( numbr( varget( '<7>' ) ) <8> numbr( '<9>' ) )
+.          ifthen ( '<6>' eq 'And' )
+.             PASSTEST = PASSTEST  +  1   | User wanted an 'AND"
+.          elseif ( '<6>' eq 'Or' )
+.            PASSTEST = 2             | User wanted an 'OR'
+.          endif
+.        endif
+.      endif
+.      ifthen ( vtype( <2>,'<7>' ) eq 3 ) |dates
+.      DATESTR = datemap ( <2>, '<7>' )
+.        ifthen ( cdate( varget( '<7>' ),DATESTR ) <8> cdate( '<9>',datemap( <2>,'<7>' ) ) )
+
+.          ifthen ( '<6>' eq 'And' )
+.            PASSTEST = PASSTEST  +  1    | User wanted an 'AND"
+.          elseif ( '<6>' eq 'Or' )
+.            PASSTEST = 2             | User wanted an 'OR'
+.          endif   |and or
+.        endif     |var=val
+.      endif       |vtype
+.      ifthen ( vtype( <2>,'<7>' ) eq 4 ) |TIMES
+.      TIMESTR = timemap ( <2>, '<7>' )
+.        ifthen ( ctime( varget( '<7>' ),TIMESTR ) <8> ctime( '<9>',timemap( <2>,'<7>' ) ) )
+.          ifthen ( '<6>' eq 'And' )
+.            PASSTEST = PASSTEST  +  1    | User wanted an 'AND"
+.          elseif ( '<6>' eq 'Or' )
+.            PASSTEST = 2             | User wanted an 'OR'
+.          endif   |and or
+.        endif     |var=val
+.      endif       |vtype
+.    elseif ( '<6>' eq  'Skip' )
+.      PASSTEST = PASSTEST  +  1
+.    endif         |skipped
+.    ifthen ( PASSTEST GE 2 )   |passed the above tests by being meeting enough criteria
+.       COUNTS = COUNTS  +  1
+.          SHOWKEYS = '<td>'
+.       for EACH_KEY = 1, nkeys( <2> )  +  dbtype( 0 )  | + 1 BECAUSE OF THE CASE ID
+.          KEYINFO(  EACH_KEY  ) = pack(  keyname(  <2>, EACH_KEY ) )
+.          SHOWKEYS = SHOWKEYS  +  KEYINFO( EACH_KEY ) +  ':<b> '  +  varget( KEYINFO( EACH_KEY ) )  +  '</b><br> '
+.       end for
+
+.       ifthen ( exists( <3> ) eq 1  )  |Real value
+.            RESULTS = varget( '<3>' )  +  ' '  +  pack( fst( vallab( <3> ), '') )
+.       elseif ( exists( <3> ) eq 0  )  |Missing value
+.          ifthen ( 0 eq misnum( <3> ) ) |system missing
+.             RESULTS = 'Blank'
+.          endif
+.          for EACH_MISSING = 1, 3
+.            ifthen ( EACH_MISSING eq misnum( <3> ) )  |user defined missing
+.               RESULTS = miss( <2>, '<3>', EACH_MISSING ) +
+                          ' '  +  pack( fst( vallabsc( <2>, '<3>', miss( <2>, '<3>', EACH_MISSING  )) , '') )
+.            endif
+.          end for
+.       endif
+.       ifthen ( '<6>' ne 'Skip' )
+.          ifthen ( exists( <7> ) eq 1  )  |Real value
+.              RESULTS = RESULTS  +  '<td>'  +  varget( '<7>' ) +
+                         ' ' + pack( fst( vallab( <7> ), '' )) + '</td>'
+.          elseif ( exists( <7> ) eq 0  )  |Missing value
+.             ifthen ( 0 eq misnum( <7> ) )
+.               RESULTS = RESULTS + '<td>Blank</td>'
+.             endif
+.             for EACH_MISSING =1, 3
+.                ifthen ( EACH_MISSING eq misnum( <7> ) )
+.                  RESULTS = RESULTS + '<td>' + miss( <2>, '<7>', EACH_MISSING ) + ' ' +
+                             pack( fst( vallabsc( <2>, '<7>', miss( <2>, '<7>', EACH_MISSING )), '' ) ) + '</td>'
+.                endif
+.             end for
+.          endif
+.       endif
+.       write ( seach_html ) ['    <tr>'  +  SHOWKEYS]
+.       write ( seach_html ) ['    <td>'  +  RESULTS  +  '</td></tr>']
+|SHOWMATC
+.    endif
+.  end rec
+set item 1,format( COUNTS ) + ' of ' +  format( NUMRECS( <2> ) ) + '    ' + format( rnd( COUNTS/NUMRECS( <2> ) * 100 ) ) + '%'      |SUMMARY
+cif eq 1,0<G_CASED>
+end cases
+cif end
+C summary for SHOWMATC
+write ( seach_html ) '  </table>'
+write ( seach_html ) '  <table  width="100%" border=0 bgcolor="#FFFFCC">'
+write ( seach_html ) '    <tr><td><hr></td></tr>'
+if ( COUNTS=0 ) write ( seach_html ) '    <tr><td><p><b><big>Sorry, nothing was found</big></b></p></td></tr>'
+TOPTEXT = TOPTEXT + '.......... ' + format( COUNTS ) + ' of ' +  format( NUMRECS( <2> ) ) + '..........' + format( rnd( COUNTS/NUMRECS( <2> )*100 ) ) + '%'
+write ( seach_html ) '    <tr><td><p><b><big>' TOPTEXT '</big></b></p></td></tr>'
+write ( seach_html ) '  </table>'
+write ( seach_html ) '</table>'
+write ( seach_html ) '</body>'
+write ( seach_html ) '</html>'
+close ( seach_html )
+DUMB_N# = help( 'file: "' + dsn( 'seach_html' ) + '"' )
+end retrieval
+END PROCEDURE

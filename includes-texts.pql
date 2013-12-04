@@ -1,0 +1,159 @@
+PROCEDURE      INCLUDES.TEXTS:T  (157471,49837)  |Last amended Dec 04, 2013,13:50:37
+| Creator:   Greg Neils
+| Created:   2006
+| Updated:   2008
+| Reason:    Create an HTML table
+| Output:
+c  WARNING:  GREC1-4 MIGHT BE A SINGLE RECORD NUMBER OR IT MIGHT CONTAIN ALL RECORD NUMBERS.  It is passed in.
+c
+c
+retrieval progress CRWARN   |<1> = TEXT TO FIND <2>=Exact Match=1
+print back noremarks nocommands
+string  * 250  KEYINFO
+integer *   1  RESVAR
+integer *   1  SORRY#
+integer *   4  ASKED
+integer *   4  ATCASE#
+integer *   4  TOCASE#
+integer *   1  MATCH      | 0= SYSTEM MISSING    1,2, OR 3=MISSING VALUE 1,2, OR 3      4=REAL MATCH    9=do nothing
+integer *   1  ALLMISS    | 1= SHOW ALL VARIABLES WITH SYSTEM MISSING
+integer *   1  EXACT_Y    | <2> If it equals 1 then it is an exact match
+integer *   1  DUMB_N#    | Helps open HTML Browser`
+string  *  20  SHOWBUSY   | Updates main GUI dialog
+integer *   4  TOOLONG2   | Has it been to long?  Maybe the user wants to cancel the program
+integer *   2  NVARS_#    | # of Vars in a record
+integer *   4  MISVAL     | Missing value number as an integer
+string  *  32  TXTVAR1    | Variable name as text
+string  *  32  AKEY       | Key variable as text
+
+open seach_html   /write lrecl=600
+write (seach_html) '<html>'
+write (seach_html) '<head>'
+write (seach_html) '<title>'
+write (seach_html) 'Results for your search for text'
+write (seach_html) '</title>'
+write (seach_html) '</head>'
+write (seach_html) '<body>'
+write (seach_html) '<table border=1 width="100%"><tr><td>'
+write (seach_html) '  <table  width="100%" border=0 bgcolor="#FFFFCC">'
+write (seach_html) '    <tr><td><p><big>Generated on ' [datec(today(0),'mm/dd/yy')]  ' at ' [timec(now(0),'hh:mm')] 'by ' [sglobal('USERA')]  ' and the D.C.C.</big></p></td></tr>'
+write (seach_html) '    <tr><td><p><b><big>Search for: <1> </big></b></p></td></tr>'
+write (seach_html) '    <tr><td><hr></td></tr>'
+write (seach_html) '  </table> '
+write (seach_html) '  <table border=1 CELLPADDING=10 CELLSPACING=0>'
+write (seach_html) '    <tr>'
+write (seach_html) '    <td bgcolor="#CCCCCC"><b>Identifiers<b></td>'
+write (seach_html) '    <td bgcolor="#CCCCCC"><b>Table</b></td> <td bgcolor="#CCCCCC"><b>Variable</b></td><td bgcolor="#CCCCCC"><b>Found</b></td>'
+write (seach_html) '    </tr>'
+
+
+set ASKED ATCASE# SORRY#(0)
+set ALLMISS (0)
+set EXACT_Y (0)
+if ('<1>' = 'allmissing') compute ALLMISS=1
+if ('<2>' = '1') compute EXACT_Y = 1
+compute TOCASE#  = system(24)
+compute TOOLONG2 = now(0) +60 | 60 seconds
+cif eq 1,0<G_CASED>
+process cases
+cif end
+. compute ATCASE# = ATCASE# + 1
+. compute SHOWBUSY= format(ATCASE#)+' / '+ format(TOCASE#)
+. set item 1, SHOWBUSY
+. do repeat XREC = <GREC1>
+                   <GREC2>
+                   <GREC3>
+                   <GREC4>
+.   process rec XREC
+.     for NVARS_# = 1,nvarsc(XREC)
+.       compute MATCH  = 9
+.       compute MISVAL = 9
+.       compute TXTVAR1 = varnamec(XREC,NVARS_#)
+.       if (pack(varget(TXTVAR1)) eq '') next for |it was a ' '  not a blank, not a missing just a ' '!  Possibly put this to a system missing in the future
+.       if then (exists(varget(TXTVAR1)) eq 0) |it MIGHT be a missing value.
+.         evaluate MISVAL = "misnum(" + trim(TXTVAR1) + ")"
+.         if ( MISVAL = 0) exit if
+.         if ( pack(miss(XREC,TXTVAR1,MISVAL)) eq '')  next for  |BECAUSE YOU CAN DEFINE A MISSING VALUE AS 'BLANK'  PAIN IN THE ASS.
+.         if ( pack(upper(miss(XREC,TXTVAR1,MISVAL))) = pack(upper('<1>'))  ) compute MATCH = MISVAL
+.       else |NOT A MISSING VALUE
+.         if then (EXACT_Y=1)
+.           if (pack(upper(varget(TXTVAR1)))=pack(upper('<1>'))) compute MATCH = 4
+.         else
+.           if (pattern(pack(upper(varget(TXTVAR1))),pack(upper('@<1>@'))) eq 1) compute MATCH = 4
+.         end if
+.       end if
+|
+.       if then (MISVAL = 0)
+.         if then  (ALLMISS= 0)
+.           next for |SYSTEM MISSING
+.         else
+.           compute MATCH = 0
+.         end if
+.       end if
+
+.       compute KEYINFO = ''
+.       if then (MATCH = 0)
+.         for XKEYS = 1, nkeys(XREC) + 1
+.           compute AKEY = pack(keyname(XREC,XKEYS))
+.           compute KEYINFO = KEYINFO + pack(keyname(XREC,XKEYS)) + ' <b>' + varget(AKEY) + '</b><br>'
+.         end for
+.         write (seach_html) '    <td>' KEYINFO '</td>'
+.         write (seach_html) '    <td>' [recname(XREC)] '</td>'
+.         write (seach_html) '    <td>' TXTVAR1 '</td>'
+.         write (seach_html) '    <td> No Data Value</td>'
+.         write (seach_html) '  </tr>'
+.       else if (MATCH = 1 or 2 or 3)
+.         compute SORRY# = 1
+.         for XKEYS=1,nkeys(XREC)+1
+.           compute AKEY=pack(keyname(XREC,XKEYS))
+.           compute KEYINFO=KEYINFO+pack(keyname(XREC,XKEYS))+' <b>'+varget(AKEY)+'</b><br>'
+.         end for
+.         write (seach_html) '    <td>' KEYINFO '</td>'
+.         write (seach_html) '    <td>' [recname(XREC)] '</td>'
+.         write (seach_html) '    <td>' TXTVAR1 '</td>'
+.         write (seach_html) '    <td>Miss Value: ' [miss(XREC,TXTVAR1,MATCH)] '</td>'
+.         write (seach_html) '  </tr>'
+.       else if (MATCH = 4)
+.         compute SORRY# = 1
+.         for XKEYS=1,nkeys(XREC)+1
+.           compute AKEY=pack(keyname(XREC,XKEYS))
+.           compute KEYINFO=KEYINFO+pack(keyname(XREC,XKEYS))+' <b>'+varget(AKEY)+'</b><br>'
+.         end for
+.         write (seach_html) '    <td>' KEYINFO '</td>'
+.         write (seach_html) '    <td>' [recname(XREC)] '</td>'
+.         write (seach_html) '    <td>' TXTVAR1 '</td>'
+.         write (seach_html) '    <td>  Data Value: ' [pack(upper(varget(TXTVAR1)))] '</td>'
+.         write (seach_html) '  </tr>'
+.       end if
+.     end for
+.   end rec
+. end repeat
+. if then (now(0) > TOOLONG2)
+.   if then (ASKED=0)
+.     display yesnobox,'It has been over a minute. Do you want to continue?' response RESVAR
+.     if then (RESVAR =0)
+cif eq 1,0<G_CASED>
+.       exit cases
+cif end
+.     else
+.       compute ASKED=1
+.     end if
+.   end if
+. endif
+cif eq 1,0<G_CASED>
+end cases
+cif end
+c WRITE TOOLONG2 [NOW(0)] 20T [NOW(0)-(TOOLONG2-60)]
+if (SORRY# EQ 0) write (seach_html) '    <tr><td> Sorry, Nothing was found</td></tr>'
+write (seach_html) '  </table>'
+write (seach_html) '</table>'
+write (seach_html) '</body>'
+write (seach_html) '</html>'
+close (seach_html)
+ifthen (SORRY# EQ 0)
+. display infobox "Sorry, No Matches were found."
+else
+. compute DUMB_N# = help('file: "'+dsn('seach_html')+'"')
+endif
+end retrieval
+END PROCEDURE

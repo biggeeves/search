@@ -1,0 +1,510 @@
+PROCEDURE      INCLUDES.FREQ:T  (157471,49936)  |Last amended Dec 04, 2013,13:52:16
+| Creator:   Greg Neils
+| Created:   2006
+| Reason:    Creates frequency report.
+| Output:    HTML files in the SIR folder.  Because it will allow me to see what people are creating.
+| Version:   2.1
+
+
+GCOMPUTE COMMENT = '. '
+
+
+retrieval progress CRWARN |<1>=varname of CASEID <2>=Rec type#   <3>=VAR1NAME    <4>=SIGN1 <5>=VALUE1
+                          |<6>=ANDOR1                            <7>=VAR2NAME    <8>=SIGN2 <9>=value2
+                          |<10> = SEL_REC#    <11>=SEL_VAR    <12>=SEL_SIGN     <13>=SEL_ED
+                          |1=SUMMARY 2=SHOWDATA  from the general2 member assigments of dialog items
+                          |first comes frequencies, then comes matches
+print back noremarks nocommands
+string  *   30  KEYSTR1          | To display the record Keys at the top
+string  *  250  KEYSTR2
+string  *  250  STR$             | frequencies output
+integer *    1  DUMB_N#          | USED TO CALL WEB BROWSER
+integer *    4  array VARFREQ1 (-201:501)
+integer *    2  array VARFREQ_YEAR (-200:10)
+integer *    2  array VARFREQ_MONTH (1:12)
+integer *    4  array MISFREQ1 (0:4)
+string  *  100  array STR_FREQ_$ (300:350) | What is the open text value.
+integer *    4  VARMIN1 VARMAX1  | Variable Mins and Maxs as found during the retrieal or set in Schema.
+integer *    4  SUMVAL1          | Sums of frequencies used to derive percentages
+integer *    4  RECMIN1 RECMAX1  | holds minimum and maximum values encountered during a process cases
+integer *    4  COUNTED          | Updates the progress bar on the main dialog screen
+integer *    4  SHORDATE SHORTIME
+integer *    1  NUMKEYS          | Number of keys
+integer *    1  NUMMISS          | Missing numbers
+integer *    2  NUMVALS          | Number of valid values
+integer *    4  FREQVAL1         | What I hope changes the face of the planet
+integer *    2  FREQVAL_STR      | Strings have 2 frequencies.  The first is the alaphabet.  the second is the actual string... limit in numbers
+integer *    2  FREQVAL_YEAR     | Frequencies for dates in YEARS
+integer *    1  FREQVAL_MONTH    | Frequencies for dates in Months
+integer *    1  NMISS            | Number missing
+string  *    1  SMISS            | String Missing
+integer *    1  MISVALX          | Which missing value is passed in for Limiting Search
+integer *    1  PASSTEST         | Does it pass Selection Criteria?
+string  *   25  DATESTR          | What is the format of the Date
+string  *   25  TIMESTR          | What is the format of the Time
+integer *    1  VAR_WHAT_TYPE    | What is the vartype of the passed variable
+string  *   25  VAR_DATE_MAP     | datemap(<2>,'<3>')
+integer *    2  WHAT_ARRAY_SIZE  | What is the size of the array
+integer *    4  N_CYCLE          | For cycle N
+
+integer *    4  LARGE_TOTAL_DIVISOR  LARGE_TOTAL
+
+value labels VAR_WHAT_TYPE  (1) 'string'
+                          (2) 'categorical'
+                          (3) 'date'
+                          (4) 'time'
+                          (5) 'integer'
+                          (6) 'real (single precision)'
+                          (7) 'real (double precision)'
+                          (8) 'scaled variable'/
+
+value labels FREQVAL_MONTH (1) 'Jan.'
+                          (2) 'Feb.'
+                          (3) 'March'
+                          (4) 'April'
+                          (5) 'May'
+                          (6) 'June'
+                          (7) 'July'
+                          (8) 'August'
+                          (9) 'Sept.'
+                          (10) 'Oct.'
+                          (11) 'Nov.'
+                          (12) 'Dec.'/
+
+set NMISS (nmissing)
+set SMISS (smissing)
+set COUNTED    (0)
+set SUMVAL1    (0)           |Sum of valid values for frequencies
+set MISFREQ1 * (0)           |missing value frequencies
+set KEYSTR2    ('')
+SET STR_FREQ_$ * ('')
+
+VAR_WHAT_TYPE = vtype(<2> , '<3>')
+VAR_DATE_MAP  = datemap(<2> , '<3>')
+
+<COMMENT> write VAR_WHAT_TYPE   [VALLAB(VAR_WHAT_TYPE)]
+<comment> write 'start: <1> <2> <3> <4> <5> <6> <7> <8> <9> end'|  if you want to see what it is being passed uncomment this line
+c note that vformat(<2> , '<3>') does not work because it can return an I12! and that is not what we want with an I1
+
+open seach_html   /write lrecl = 600
+write (seach_html) '<html>'
+write (seach_html) '<head>'
+write (seach_html) '<title>'
+write (seach_html) 'Results for your search'
+write (seach_html) '</title>'
+write (seach_html) '</head>'
+write (seach_html) '<body>'
+write (seach_html) '<table border=1 width="100%">'
+write (seach_html) '  <tr><td>'
+write (seach_html) '  <table  width="100%" border=0 bgcolor="#FFFFCC">'
+write (seach_html) '    <tr><td><p><big>Generated on ' [datec(today(0) , 'mm/dd/yy')]  ' at ' [timec(now(0) , 'hh:mm')] 'by ' [sglobal('USERA')]  ' and the D.C.C.</big></p></td></tr>'
+write (seach_html) '    <tr><td><p><big><strong>Frequencies for <3>: ' [pack(varlabsc(<2> , '<3>'))] '</strong></big></p></td></tr>'
+write (seach_html) '    <tr><td><p><big>Table ' [pack(recname(<2>))] '<strong> '  [pack(recdoc(<2> , 1))] '</strong></big></p></td></tr>'
+
+
+c show keys for each record type
+for NUMKEYS = 1 , nkeys(<2>) + 1
+.  KEYSTR1 = pack(keyname(<2> , NUMKEYS))
+. if (exists(KEYSTR1) eq 1) KEYSTR2 = KEYSTR2 + ', ' + KEYSTR1
+end for
+write (seach_html) '    <tr><td>Keys: ' KEYSTR2 '</td></tr>'
+ifthen ('<13>' ne 'GREG WAS HERE') |no selection criteria was specified
+. write (seach_html) '    <tr><td bgcolor ="#CCCCCC"> Selection criteria: ' [recname(<10>)]  ':: <11>  <12>  <13>  </td></tr>'
+. ifthen (nkeys(<10>) gt 0)
+.   write (seach_html) '    <tr><td bgcolor ="#CCCCCC">Criteria  was based on a multiple instance record. Inclusion is all or nothing.</td></tr>'
+. endif
+endif
+write (seach_html) '    <tr><td><hr></td></tr>'
+
+if (miss(<10> , '<11>' , 1) eq '<13>') MISVALX = 1
+if (miss(<10> , '<11>' , 2) eq '<13>') MISVALX = 2
+if (miss(<10> , '<11>' , 3) eq '<13>') MISVALX = 3
+if ('<13>' eq '') MISVALX = 0  | must come last to correctly assign MISVALX
+
+
+c min and max range
+ifthen ( (nmin(<2> , '<3>') ge -200) and
+         (nmin(<2> , '<3>') le 500) )
+. VARMIN1 = nmin(<2> , '<3>')
+else
+. VARMIN1 = -201
+endif
+ifthen ((nmax(<2> , '<3>') ge -200) and
+        (nmax(<2> , '<3>') le 500) )
+. VARMAX1 = nmax(<2> , '<3>')
+else
+. VARMAX1 = 501
+endif
+
+ifthen (VAR_WHAT_TYPE eq 2 )  |Categorical Var
+. VARMIN1 = 1
+. ifthen (nvalid(<2> , '<3>') le 500)
+.   VARMAX1 = nvalid(<2> , '<3>')
+. else
+.   VARMAX1 = 501
+. endif
+elseif (VAR_WHAT_TYPE eq 3 )  |date variable
+. VARMIN1 = -201
+. VARMAX1 = 501
+elseif (VAR_WHAT_TYPE eq 4 )  |time variable
+. VARMIN1 = 0
+. VARMAX1 = 23
+endif
+
+WHAT_ARRAY_SIZE = abs(VARMAX1-VARMIN1)
+redefine array 'VARFREQ1' (VARMIN1:VARMAX1)
+set VARFREQ1 * (0)
+set VARFREQ_YEAR * (0)
+set VARFREQ_MONTH * (0)
+
+<COMMENT> write VARMIN1 '- ' VARMAX1   '(' [VARMAX1-VARMIN1] ')'
+<COMMENT> write 'ARRAY START:' [arrdimst('VARFREQ1' , 1)]
+<COMMENT> write 'ARRAY SIZE:' [arrdimsz('VARFREQ1' , 1)]
+
+DATESTR = datemap (<10>, '<11>') | trick cdate coding below. I need this.
+TIMESTR = timemap (<10>, '<11>') | trick ctime coding below. I need this.
+
+cif eq 1 , 0<G_CASED>
+process cases
+cif end
+| SELECTION CRITERIA.  This is the gold standard for any copy and paste
+. ifthen ('<13>' ne 'GREG WAS HERE') |no selection criteria was specified
+.   compute PASSTEST = 0
+.   process rec <10>
+.     ifthen (vtype(<10> , '<11>') eq 1)  |string
+.       if (varget('<11>') <12> '<13>')  PASSTEST = 1
+.     elseif (vtype(<10> , '<11>') eq 2)  |category
+.       if (varget('<11>') <12> '<13>')  PASSTEST = 1
+.     elseif (vtype(<10> , '<11>') eq 3)  |date
+.       if then (cdate(varget('<11>'),DATESTR) <12> cdate('<13>', DATESTR))
+.         PASSTEST = 1
+.       endif
+.     elseif (vtype(<10>, '<11>') eq 4)  |time
+.       if then (ctime(varget('<11>'), TIMESTR) <12> ctime('<13>', TIMESTR))
+.         PASSTEST = 1
+c .         write [varget('<11>')] '<12>' '<13>'
+.       endif
+.     else
+.       if (numbr(varget('<11>')) <12> numbr('<13>')) PASSTEST = 1
+.     endif
+.     ifthen (exists(<11>) eq 0)
+.       if (misnum(<11>) eq MISVALX) PASSTEST = 1       |They have already seen the alert "Missing values must use '='"
+.     endif
+.   end rec
+cif eq 1,0<G_CASED>
+.   if (PASSTEST = 0) NEXT CASE  |All or nothing you might write~!
+cif end
+. endif
+| end selection criteria
+. process rec <2>
+.   FREQVAL1      = NMISS
+.   FREQVAL_STR   = NMISS
+.   FREQVAL_YEAR  = NMISS
+.   FREQVAL_MONTH = NMISS
+.   COUNTED  = COUNTED + 1
+c STRING
+.   ifthen (VAR_WHAT_TYPE eq 1)  |string
+.     ifthen (exists(<3>)) |NOT a missing value
+.       FREQVAL1 = ichar(upper(substr(varget('<3>'), 1, 1)))
+.       SUMVAL1 = SUMVAL1 + 1
+.       for NUMVALS = 300, 350
+.         ifthen (STR_FREQ_$(NUMVALS) eq '' ) | blank spot. take it.
+.           STR_FREQ_$(NUMVALS) = upper(varget('<3>'))
+.           FREQVAL_STR = NUMVALS
+.           EXIT FOR
+.         elseif (STR_FREQ_$(NUMVALS) eq upper(varget('<3>')))
+.           FREQVAL_STR = NUMVALS
+.           EXIT FOR
+.         ELSE
+.         endif
+.       end for
+.       if(NUMVALS EQ 351)  FREQVAL_STR = 501  | Other value
+.     endif
+.   endif
+c catagorical
+.   ifthen (VAR_WHAT_TYPE eq 2)  |catagorical
+.     ifthen (exists(<3>)) |NOT a missing value
+.       for NUMVALS = 1, nvalid(<2>, '<3>')  |must cycle thru and get values instead of use "catint"
+.         ifthen (NUMVALS lt 501)
+.           if (svval ( <2>, '<3>', NUMVALS ) eq varget('<3>')) FREQVAL1 = NUMVALS    |VARFREQ1(NUMVALS)=VARFREQ1(NUMVALS) + 1
+.         else
+.           if (svval ( <2>, '<3>', NUMVALS ) eq varget('<3>')) FREQVAL1 = 501
+.         endif
+.       end for
+.       SUMVAL1 = SUMVAL1 + 1
+.     endif
+.   endif
+c DATE
+.   ifthen (VAR_WHAT_TYPE eq 3 ) |Date
+.     SHORDATE = today(0) - cdate(varget('<3>'), VAR_DATE_MAP) |stores the number date from today
+.     ifthen (exists(SHORDATE) eq 1)
+.       ifthen (SHORDATE lt -200)               |out of bottom range
+.         FREQVAL1 = -201
+.       elseif (SHORDATE gt 500)                |out of top range
+.         FREQVAL1 = 501
+.       else
+.         FREQVAL1 = SHORDATE
+.       endif
+.       FREQVAL_YEAR = numbr(datec(cdate(varget('<3>'), VAR_DATE_MAP), 'YYYY')) - numbr(datec(today(0), 'yyyy'))| This brings it down to a reasonable number
+.       FREQVAL_MONTH = numbr(datec(cdate(varget('<3>'), VAR_DATE_MAP), 'MM'))
+.       SUMVAL1 = SUMVAL1 + 1  |just get the nonmissing total
+c write FREQVAL1  20t FREQVAL_MONTH 30t FREQVAL_YEAR   [numbr(datec(cdate(varget('<3>'), VAR_DATE_MAP), 'YYYY'))]
+.     endif
+.   endif
+c TIME
+.   ifthen (VAR_WHAT_TYPE eq 4 ) |time
+.     SHORTIME = numbr(timec(ctime(varget('<3>'), timemap(<2>, '<3>')), 'hh'))  |stores the hour
+.     ifthen (exists(SHORTIME) eq 1)
+.       FREQVAL1 = SHORTIME
+.       SUMVAL1 = SUMVAL1 + 1  |just get the nonmissing total
+.     endif
+.   endif
+c Integer
+.   ifthen (VAR_WHAT_TYPE eq 5)       |integer
+.     ifthen (numbr(varget('<3>')) ge VARMIN1 and le VARMAX1)
+.       FREQVAL1 = numbr(varget('<3>'))
+.       SUMVAL1 = SUMVAL1 + 1  |just get the nonmissing total
+.     elseif (numbr(varget('<3>')) lt VARMIN1)
+.       FREQVAL1  = -201
+.       SUMVAL1 = SUMVAL1 + 1  |just get the nonmissing total
+.     elseif (numbr(varget('<3>')) gt VARMAX1)
+.       FREQVAL1 = 501
+.       SUMVAL1 = SUMVAL1 + 1  |just get the nonmissing total
+.     endif
+.   endif
+|
+c REAL (DECIMAL)
+.   ifthen (VAR_WHAT_TYPE eq 6 or 7)       |decimal OR A BIG NUMBER
+.     ifthen (rnd(numbr(varget('<3>'))) ge VARMIN1 and le VARMAX1)
+.       FREQVAL1 = rnd(numbr(varget('<3>')))
+.       SUMVAL1 = SUMVAL1 + 1  |just get the nonmissing total
+.     elseif (rnd(numbr(varget('<3>'))) lt VARMIN1)
+.       FREQVAL1 = -201
+.       SUMVAL1 = SUMVAL1 + 1  |just get the nonmissing total
+.     elseif (rnd(numbr(varget('<3>'))) gt VARMAX1)
+.       FREQVAL1 = 501
+.       SUMVAL1 = SUMVAL1 + 1  |just get the nonmissing total
+.     endif
+.   endif
+|
+c missing values
+.   ifthen (misnum(<3>) ge 0)  |has a missing value 1 OR 2 OR 3
+.     MISFREQ1(misnum(<3>)) = MISFREQ1(misnum(<3>)) + 1
+.   endif
+c minimums and maximums
+.   ifthen (VAR_WHAT_TYPE eq 5 or 6 or 7) |numbers
+.     if ((exists(RECMIN1) eq 0) or (RECMIN1 gt rnd(numbr(varget('<3>')))))  RECMIN1 = rnd(numbr(varget('<3>')))
+.     if ((exists(RECMAX1) eq 0) or (RECMAX1 lt rnd(numbr(varget('<3>')))))  RECMAX1 = rnd(numbr(varget('<3>')))
+.   endif
+
+C ACTUAL FREQUENCY ADDITION
+.   ifthen (exists(FREQVAL1) eq 1)
+.     VARFREQ1(FREQVAL1) = VARFREQ1(FREQVAL1) + 1   | THE  MOST IMPORT LINE IN THE ENTIRE PROGRAM
+.   endif
+.   ifthen (exists(FREQVAL_STR) eq 1) | strings get a second frequency
+.     VARFREQ1(FREQVAL_STR) = VARFREQ1(FREQVAL_STR) + 1   | THE  MOST IMPORT LINE IN THE ENTIRE PROGRAM
+.   endif
+.   ifthen (exists(FREQVAL_YEAR) eq 1) | YEAR frequency
+.     VARFREQ_YEAR(FREQVAL_YEAR) = VARFREQ_YEAR(FREQVAL_YEAR) + 1   | THE  MOST IMPORT LINE IN THE ENTIRE PROGRAM
+.   endif
+.   ifthen (exists(FREQVAL_MONTH) eq 1) | YEAR frequency
+.     VARFREQ_MONTH(FREQVAL_MONTH) = VARFREQ_MONTH(FREQVAL_MONTH) + 1   | THE  MOST IMPORT LINE IN THE ENTIRE PROGRAM
+.   endif
+
+
+.  end rec
+.  set item 1, format(COUNTED) + '/' + format(numrecs(<2>)) |SUMMARY
+cif eq 1, 0<G_CASED>
+end cases
+cif end
+
+
+c frequecies output
+c maximum and minimum found during process cases
+. ifthen (exists(RECMIN1) eq 1)
+.   write (seach_html) [  '    <tr><td>Minimum: <strong>' +  format(RECMIN1) +  '</strong>  Maximum: <strong>'  + format(RECMAX1) + '</strong></td></tr>']
+. else
+.   write (seach_html)    '    <tr><td>Range was not found</td></tr>'
+. endif
+
+. ifthen (VAR_WHAT_TYPE eq 1 ) | String
+.   write (seach_html) '    <tr><td>For string variable Frequencies uses the first letter. </td></tr>'
+.   write (seach_html) '    <tr><td>Below: Limited to 50 values.</td></tr>'
+
+. elseif (VAR_WHAT_TYPE eq 3 ) |Date
+.   write (seach_html) '    <tr><td>Separate break down by Month, Year and Day. </td></tr>'
+. elseif (VAR_WHAT_TYPE eq 4 ) |time
+.   write (seach_html) '    <tr><td>Times are using a 24 hour clock rounding down to the nearest hour: </td></tr>'
+. elseif (VAR_WHAT_TYPE eq 6 or 7 ) |real (decimal)
+.   write (seach_html) '    <tr><td>Numbers were rounded to the nearest whole number: </td></tr>'
+. endif
+
+. ifthen ((exists(nmin(<2>, '<3>'))) or nvallab(<2>, '<3>') GT 0)  |specified range or value labels
+c   do not change the output it will use the two things above
+. elseif (RECMIN1 GT -200 AND LE 200) |staying within the range of VARFREQ1 if a minimum was found
+.   VARMIN1 = RECMIN1
+. elseif (RECMIN1 LT -200)
+.   STR$ = 'Minimum value exceed -200,  only values above -200 will be shown'
+.   write (seach_html) '    <tr><td>' STR$ '</td></tr>'
+. endif
+c
+. ifthen ((exists(nmax(<2>, '<3>'))) or (nvallab(<2>, '<3>') GT 0))  |specified range or value labels
+c   do not put anything here
+. elseif (RECMAX1 GT -200 AND LE 500) |staying within the range of VARFREQ1
+.   VARMAX1 = RECMAX1
+. elseif (RECMAX1 GT 500)
+.   VARMAX1 = 501
+.   STR$ = 'Maximum value exceed 500,  only values below 500 will be shown'
+.   write (seach_html) '    <tr><td>' STR$ '</td></tr>'
+. endif
+. write (seach_html) '  </table> '
+. write (seach_html) '  <hr>'
+
+. write (seach_html) '  <table border=1 CELLPADDING=10 CELLSPACING=0>'
+. write (seach_html) '    <tr><td bgcolor="#CCCCCC"><b>Data Value</b></td><td bgcolor="#CCCCCC"><b>Frequency</b></td><td bgcolor="#CCCCCC"><b>Percentage</b></td></tr>'
+
+C STRING
+. ifthen (VAR_WHAT_TYPE eq 1)  | String
+.   for n = 300, 350 | number of letters in the alphabet
+.     STR$ = '<b>' +  STR_FREQ_$(N) + '</b>'
+.     if (VARFREQ1(N) ne 0) execute subprocedure ADD_COLS
+.   end for
+.   n = 501; STR$ = '<b>Other Values</b>'; execute subprocedure ADD_COLS
+.   write (seach_html) '    <tr><td>Starts with the letter...</td><td COLSPAN=2><HR></td></tr>'
+.   for n = 1, 256 | number of letters in the alphabet
+.     STR$ = '<b>' + char(n) + '</b>'
+.     if (VARFREQ1(N) ne 0) execute subprocedure ADD_COLS
+.   end for
+
+c other
+. elseif (VAR_WHAT_TYPE ne 2 and 3)  | IE 4, 5, 6, 7, 8
+<comment> write 'VarType NE 2 and 3'
+
+.   ifthen (SUMVAL1 gt 0)  |returned some valid values  (ie rule out division by 0)
+.     for n = VARMIN1, VARMAX1
+c .       if (n=miss(<2>, '<3>', 1) or miss(<2>, '<3>', 2) or miss(<2>, '<3>', 3))   next for  Try to fix.  Rule out missing values in list
+.       ifthen (n lt -200)
+.          STR$ = '<b>' + format(n) + '</b>' +  ' ' + fst(pack(vallabsc(<2>, '<3>', n)), '') + 'and below'
+.       elseif (n gt 500)
+.          STR$ = '<b>' + format(n) + '</b>' +  ' ' + fst(pack(vallabsc(<2>, '<3>', n)), '') + 'and above'
+.       else
+.          STR$ = '<b>' + format(n) + '</b>' +  ' ' + fst(pack(vallabsc(<2>, '<3>', n)), '')
+.       endif
+.       if (VARFREQ1(N) ne 0) execute subprocedure ADD_COLS
+.     end for
+.   else
+.     STR$ = 'This variable has no data!'
+.     write (seach_html) '    <tr><td>' STR$ '</td></tr>'
+.   endif
+.   write (seach_html) ['    <tr><td>Total Count</td><td align = "right">' + format(SUMVAL1, 8)  + '</td><td align = "right">100%</td></tr>']
+
+C CATEGORICAL
+. elseif (VAR_WHAT_TYPE eq 2)  |catagorical with less than 500 catagories
+.   for n = 1, nvalid(<2>, '<3>')
+.     ifthen (n le 500)
+.        STR$ = '<b>' + format(n)  +  '</b>'  +  ' ' + pack(vallabsn(<2>, '<3>', n))
+.     else
+.        STR$ = '<b>' + format(n) + '</b>' + ' ' + pack(vallabsn(<2>, '<3>', n)) + 'and above'
+.     endif
+.     execute subprocedure ADD_COLS
+.   end for
+.   write (seach_html) ['    <tr><td>Total Count</td><td align="right">' + format(SUMVAL1)  + '</td><td align="right">100% </td></tr>']
+
+C DATE
+. elseif (VAR_WHAT_TYPE eq 3)  |Dates (using today to 1 year ago)
+.   ifthen (SUMVAL1 gt 0)  |returned some valid values  (ie rule out division by 0)
+.     write (seach_html) '    <tr><td colspan=3>BY YEAR</td></tr>'
+.     for N = -200, 10 | YEAR
+.       STR$ =  '<b>' +  format(numbr(datec(today(0), 'yyyy')) + N) +'</b>'
+.       if (VARFREQ_YEAR(N) NE 0) execute subprocedure ADD_COLS_YEAR
+.     end for
+.     write (seach_html) '    <tr><td>BY MONTH</td><td COLSPAN=2><HR></td></tr>'
+.     for N = 1, 12 | MONTH
+.       STR$ =  '<b>' +  VALLABSC(-1, 'FREQVAL_MONTH', N)  + '</b>'
+.       if (VARFREQ_MONTH(N) NE 0) execute subprocedure ADD_COLS_MONTH
+.     end for
+.     write (seach_html) '    <tr><td>BY DAY</td><td COLSPAN=2><HR></td></tr>'
+.     for N = -201, 501 | DAYS
+.       ifthen (N lt -200)
+.          STR$ = 'After: ' + datec(today(0) - N, VAR_DATE_MAP)
+.       elseif (N gt 500)
+.          STR$ = 'Before: ' +  datec(today(0) - N, VAR_DATE_MAP)
+.       else
+.          STR$ = '<b>' + datec(today(0) - N, VAR_DATE_MAP) + '</b>'
+.       endif
+.       if (VARFREQ1(N) NE 0) execute subprocedure ADD_COLS
+.     end for
+.   else
+.     STR$ = 'This variable has no data!'
+.     write (seach_html) '    <tr><td colspan=3>' STR$ '</td></tr>'
+.   endif
+. endif
+
+
+| new section for averages
+. LARGE_TOTAL = 0
+. LARGE_TOTAL_DIVISOR = 0
+. for n = VARMIN1, VARMAX1
+.   ifthen (n ge -200 and le 500)
+.     ifthen (VARFREQ1(N) NE 0)
+.       LARGE_TOTAL = LARGE_TOTAL  + (N * VARFREQ1(N))
+.       LARGE_TOTAL_DIVISOR = LARGE_TOTAL_DIVISOR + VARFREQ1(N)
+.     endif
+.   endif
+. end for
+. ifthen (LARGE_TOTAL_DIVISOR NE 0)
+.   ifthen (exists(LARGE_TOTAL_DIVISOR) eq 1)
+.     ifthen (VAR_WHAT_TYPE gt 3)  | Not for strings or cat vars
+.       write (seach_html)  '<tr><td><b>Average</b></td><td colspan=2><b>'   [LARGE_TOTAL  /LARGE_TOTAL_DIVISOR] '</b></td></tr>'
+.     endif
+.   endif
+. endif
+
+
+c missing value variable 1
+. write (seach_html) '    <tr><td colspan="3">Below are System Missing and User Missing Values</td></tr>'
+. STR$ = 'Blank (system missing)</td><td align="right">' + format(MISFREQ1(0), 8)
+. write (seach_html) '    <tr><td>' STR$ '</td></tr>'
+. for NUMMISS = 1, 3
+.                                        STR$ = '<b>' + miss(<2>, '<3>', NUMMISS) + '</b>'
+.   if (miss(<2>, '<3>', NUMMISS) ne '')   STR$ = STR$ + ' ' + fst(pack(vallabsc(<2>, '<3>',  miss(<2>, '<3>', NUMMISS))), '')
+.                                        STR$ = STR$ + '</td><td align="right">' + format(MISFREQ1(NUMMISS))
+.   if (exists(STR$) eq 1) write (seach_html) '    <tr><td>' STR$ '</td></tr>'
+. end for
+. write (seach_html) '  </table>'
+. write (seach_html) '</table>'
+. write (seach_html) '</body>'
+. write (seach_html) '</html>'
+. close (seach_html)
+. DUMB_N# = help('file: "' + dsn('seach_html') + '"')
+
+subprocedure ADD_COLS
+. ifthen (SUMVAL1 EQ 0)
+.   STR$ = STR$ + '</td><td align="right">' + format(VARFREQ1(N)) + '</td><td align="right">' + format(VARFREQ1(N)/100, 5, 1) + '%</td>'  |No division by SUMVAL1=0
+. else
+.   STR$ = STR$ + '</td><td align="right">' + format(VARFREQ1(N)) + '</td><td align="right">' + format(VARFREQ1(N)/SUMVAL1*100, 5, 1) + '%</td>'
+. endif
+. write (seach_html) '  <tr><td>'STR$'</td></tr>'
+end subprocedure
+
+subprocedure ADD_COLS_YEAR
+. ifthen (SUMVAL1 EQ 0)
+.   STR$ = STR$ + '</td><td align="right">' + format(VARFREQ_YEAR(N)) + '</td><td align="right">' + format(VARFREQ_YEAR(N)/100, 5, 1) + '%</td>'  |No division by SUMVAL1=0
+. else
+.   STR$ = STR$ + '</td><td align="right">' + format(VARFREQ_YEAR(N)) + '</td><td align="right">' + format(VARFREQ_YEAR(N)/SUMVAL1*100, 5, 1) + '%</td>'
+. endif
+. write (seach_html) '  <tr><td>'STR$'</td></tr>'
+end subprocedure
+
+subprocedure ADD_COLS_MONTH
+. ifthen (SUMVAL1 EQ 0)
+.   STR$ = STR$ + '</td><td align="right">' + format(VARFREQ_MONTH(N)) + '</td><td align="right">' + format(VARFREQ_MONTH(N)/100, 5, 1) + '%</td>'  |No division by SUMVAL1=0
+. else
+.   STR$ = STR$ + '</td><td align="right">' + format(VARFREQ_MONTH(N)) + '</td><td align="right">' + format(VARFREQ_MONTH(N)/SUMVAL1*100, 5, 1) + '%</td>'
+. endif
+. write (seach_html) '  <tr><td>'STR$'</td></tr>'
+end subprocedure
+
+
+end retrieval
+END PROCEDURE

@@ -1,0 +1,750 @@
+PROCEDURE      INCLUDES.CROSS_TABS:T  (157471,49686)  |Last amended Dec 04, 2013,13:48:06
+| Creator:   Greg Neils
+| Created:   2006
+| Reason:    Creates Cross Tabs report.
+| Output:    HTML files.
+| VTYPE
+ num = VTYPE ( rtnum , varname_str )
+ Returns an integer code representing the type of the variable, wv:
+ 1 = string
+ 2 = categorical
+ 3 = date
+ 4 = time
+ 5 = integer
+ 6 = real (single precision)
+ 7 = real (double precision)
+ 8 = scaled variable
+
+retrieval progress CRWARN  |<1>=varname of CASEID <2>=Rec type#   <3>=VAR1NAME    <4>=SIGN1 <5>=VALUE1
+                           |<6>=ANDOR1                            <7>=VAR2NAME    <8>=SIGN2 <9>=VALUE2
+                           |<10> = SEL_REC#    <11>=SEL_VAR    <12>=SEL_SIGN     <13>=SEL_ED
+                           |1=SUMMARY 2=SHOWDATA  from the general2 member assigments of dialog items
+c print back noremarks nocommands
+string  *   30  KEYSTR1          | What is the Key Name.  Used with KEYSTR2
+string  *  250  KEYSTR2          | All Keys
+string  *  250  STR_1$             |Cross Tabs output
+string  *    7  HTML_CLR         |HTML color changes across rows
+integer *    1  DUMB_N#          |USED TO CALL WEB BROWSER
+integer *    4  array VARFREQ (-201:205,-201:205)   |Note that 201 is the top.  202 is blank.  203, 204, 205 are missing 1, 2 and 3.
+integer *    1  array MISFREQ1 (0:4)
+integer *    1  array MISFREQ2 (0:4)
+integer *    4  VARMIN1 VARMAX1  | Min and max values of Var 1
+integer *    4  VARMIN2 VARMAX2  | Min and max values of Var 2
+integer *    4  SUMVAL1          | Sums of frequencies used to derive percentages
+integer *    4  SUMVAL2          | Sums of frequencies used to derive percentages
+integer *    4  RECMIN1 RECMAX1  | Holds minimum and maximum values encountered during a process cases
+integer *    4  RECMIN2 RECMAX2  | Holds minimum and maximum values encountered during a process cases
+integer *    4  COUNTED          | Updates the main dialog screen with the progress
+integer *    4  SHORDATE SHORTIME| dates and times converted to a number since XX date or time.
+integer *    1  NUMKEYS          | Number of keys
+integer *    1  NUMMISS#         | Missing numbers
+integer *    2  NUMVALS#         | Number of valid values
+integer *    4  FREQVAL1         | What I hope changes the face of the planet
+integer *    4  FREQVAL2         | What I hope changes the face of the planet
+integer *    2  WHICHROW         | For column heards and row labels
+integer *    2  XCOLUMNS         | Run through the column headers
+integer *    2  YROWS            | Run through the ROWS
+integer *    1  NEWROW           | If this is a new row, it needs a special column 1
+integer *    4  SUMROW           | Total sum across the whole row
+integer *    4  SUMCOL           | Total sum across the whole column
+integer *    4  SUMTOT           | Total sum across the whole table
+integer *    2  ROWLAB           | 1st Row gets a special column listing the values
+integer *    1  A_COLOR          | Flips the HTML color back and forth between rows
+integer *    1  NMISS#           | Numeric Missing
+string  *    1  SMISS            | String Missing
+integer *    1  MISSTOT1         | How many missing values are there for the columns headers
+integer *    1  PASSTEST         | If the pass the first selection criteria.
+integer *    1  MISVALX          | Which missing value is it.  Use in testing values for missing.
+string  *   25  DATESTR          | What is the format of the Date
+string  *   25  TIMESTR          | What is the format of the Time
+integer *    1  SLAPGREG         | Should Greg work on this again?  1=Oops He missed something.  0 = He did a great job.
+integer *    1  SHOWMIS          | Should we show missing values? 1=yes
+set A_COLOR    (0)           | first color
+set COUNTED    (0)
+set SUMVAL1    (0)           |Sum of valid values for frequencies
+set SUMVAL2    (0)           |Sum of valid values for frequencies
+set MISFREQ1 * (0)           |missing value frequencies
+set MISFREQ2 * (0)           |missing value frequencies
+set VARFREQ *  (0, 0)
+set NMISS#     (nmissing)
+set SMISS      (smissing)
+c write 'start: <1> <2> <3> <4> <5> <6> <7> <8> <9> end'|  if you want to see what it is being passed uncomment this line
+c note that vformat(<2>, '<3>') does not work because it can return an I12! and that is not what we want with an I1
+
+open seach_html   /write lrecl=600
+write (seach_html) '<html>'
+write (seach_html) '<head>'
+write (seach_html) '<title>'
+write (seach_html) 'Results for your search'
+write (seach_html) '</title>'
+write (seach_html) '</head>'
+write (seach_html) '<body>'
+write (seach_html) '<table border=1 width="100%">'
+write (seach_html) '  <tr><td>'
+write (seach_html) '  <table  width="100%" border=0 bgcolor="#FFFFCC">'
+write (seach_html) '    <tr><td><p><big>Generated on ' [datec(today(0), 'mm/dd/yy')]  ' at ' [timec(now(0), 'hh:mm')] 'by ' [sglobal('USERA')]  ' and the D.C.C.</big></p></td></tr>'
+write (seach_html) '    <tr><td><p align="center"><big><strong>Cross Tabs for<br> <3>: '  [pack(varlabsc(<2>, '<3>'))] ' by <br><7> ' [pack(varlabsc(<2>, '<7>'))] '</strong></big></p></td></tr>'
+write (seach_html) '    <tr><td><p><big>Table ' [pack(recname(<2>))] '<strong> '  [pack(recdoc(<2>, 1))] '</strong></big></p></td></tr>'
+
+c show keys for each record type
+compute KEYSTR2 = ''
+for NUMKEYS = 1, nkeys(<2>) + 1
+. compute KEYSTR1 = keyname(<2>, NUMKEYS)
+. if (exists(KEYSTR1) eq 1) compute KEYSTR2 = KEYSTR2 + KEYSTR1
+end for
+|
+if (miss(<10>, '<11>', 1) eq '<13>') compute MISVALX = 1
+if (miss(<10>, '<11>', 2) eq '<13>') compute MISVALX = 2
+if (miss(<10>, '<11>', 3) eq '<13>') compute MISVALX = 3
+if ('<13>' eq '') compute MISVALX = 0  |NOTE This Must come after the assigning of missing value loop (n=0, 3)
+
+write (seach_html) '    <tr><td>Keys: ' KEYSTR2 '</td></tr>'
+ifthen ('<13>' NE 'GREG WAS HERE') |no selection criteria was specified
+. write (seach_html) '    <tr><td bgcolor ="#CCCCCC"> Selection criteria: ' [recname(<10>)]  ':: <11>  <12>  <13>  </td></tr>'
+end if
+write (seach_html) '    <tr><td><hr></td></tr>'
+
+
+c min and max range for var1
+
+c VARIABLE 1
+ifthen (nmin(<2>, '<3>') ge -200)
+. compute VARMIN1 = nmin(<2>, '<3>')
+else
+. compute VARMIN1 = -201
+endif
+ifthen (nmax(<2>, '<3>') le 200)
+. compute VARMAX1 = nmax(<2>, '<3>')
+else
+. compute VARMAX1 = 201
+endif
+ifthen (vtype(<2>, '<3>') eq 2 )  |cat
+. compute VARMIN1 = 1
+. compute VARMAX1 = NVALID(<2>, '<3>')
+elseif (vtype(<2>, '<3>') eq 3 )  |date
+. compute VARMIN1 = -201
+. compute VARMAX1 = 201
+elseif (vtype(<2>, '<3>') eq 4 )  |time
+. compute VARMIN1 = 0
+. compute VARMAX1 = 23
+endif
+
+c VARIABLE 2
+ifthen (nmin(<2>, '<7>') ge -200)
+. compute VARMIN2 = nmin(<2>, '<7>')
+else
+. compute VARMIN2 = -201
+endif
+ifthen (nmax(<2>, '<7>') le 200)
+. compute VARMAX2 = nmax(<2>, '<7>')
+else
+. compute VARMAX2 = 201
+endif
+
+ifthen (vtype(<2>, '<7>') eq 2 )  |cat
+. compute VARMIN2 = 1
+. compute VARMAX2 = NVALID(<2>, '<7>')
+elseif (vtype(<2>, '<7>') eq 3 )  |date
+. compute VARMIN2 = -201
+. compute VARMAX2 = 201
+elseif (vtype(<2>, '<7>') eq 4 )  |time
+. compute VARMIN2 = 0
+. compute VARMAX2 = 23
+endif
+
+compute MISSTOT1 = 0
+for DUMB_N# = 1, 3
+. if (exists(miss(<2>, '<7>', DUMB_N#)) eq 1) compute MISSTOT1 = MISSTOT1 + 1
+end for
+cif eq 1,0<G_CASED>
+process cases
+cif end
+
+| SELECTION CRITERIA.  This is the gold standard for any copy and paste
+. ifthen ('<13>' ne 'GREG WAS HERE') |no selection criteria was specified
+.   compute PASSTEST = 0
+.   process rec <10>
+.     ifthen (vtype(<10>, '<11>')  eq  1)  |string
+.       if (varget('<11>') <12> '<13>')  PASSTEST  = 1
+.     elseif (vtype(<10>, '<11>')  eq  2)  |category
+.       if (varget('<11>') <12> '<13>')  PASSTEST  = 1
+.     elseif (vtype(<10>, '<11>') eq  3)  |date
+.       if then (cdate(varget('<11>'), DATESTR) <12> cdate('<13>', DATESTR))
+.         PASSTEST = 1
+.       endif
+.     elseif (vtype(<10>, '<11>') eq 4)  |time
+.       if then (ctime(varget('<11>'), TIMESTR) <12> ctime('<13>', TIMESTR))
+.         PASSTEST = 1
+.       endif
+.     else
+.       if (numbr(varget('<11>')) <12> numbr('<13>')) PASSTEST = 1
+.     endif
+.     ifthen (exists(<11>) eq 0)
+.       if (misnum(<11>) eq MISVALX) PASSTEST = 1       |They have already seen the alert "Missing values must use '='"
+.     endif
+.   end rec
+cif eq 1,0<G_CASED>
+.   if (PASSTEST eq 0) NEXT CASE  |All or nothing you might write~!
+cif end
+. endif
+| end selection criteria
+
+. process rec <2>
+.   compute COUNTED = COUNTED + 1
+.   compute FREQVAL1 = NMISS#
+.   compute FREQVAL2 =  NMISS#
+c frequencies for variable 1 and 2  NO frequencies for text variables
+c start with variable 1
+
+
+c STRING variable
+.   ifthen (vtype(<2>, '<3>')  eq  1)  |string
+.     ifthen (exists(<3>)) |NOT a missing value
+.       for NUMVALS# = 1, nvalid(<2>, '<3>')  |must cycle thru and get values instead of use "catint"
+.         ifthen (NUMVALS# le 200)
+.           if (svval ( <2>,  '<3>',  NUMVALS# ) eq varget('<3>')) compute FREQVAL1 = NUMVALS#
+.         elseif (NUMVALS# gt 200)
+.           if (svval ( <2>,  '<3>',  NUMVALS# ) eq varget('<3>')) compute FREQVAL1 = 201
+.         endif
+.       end for
+.       compute SUMVAL1 = SUMVAL1 + 1
+.     elseif (misnum(<3>) ge 0)  |has a missing value 0 or 1 OR 2 OR 3
+.       compute FREQVAL1 = misnum(<3>) + 202
+.     endif
+.   endif
+c catagorical variable
+.   ifthen (vtype(<2>, '<3>') eq  2)  |catagorical
+.     ifthen (exists(<3>)) |NOT a missing value
+.        for NUMVALS# = 1, nvalid(<2>, '<3>')  |must cycle thru and get values instead of use "catint"
+.          ifthen (NUMVALS# le 200)
+.            if (svval ( <2>,  '<3>',  NUMVALS# ) eq varget('<3>')) compute FREQVAL1 = NUMVALS#
+.          elseif (NUMVALS# gt 200)
+.            if (svval ( <2>,  '<3>',  NUMVALS# ) eq varget('<3>')) compute FREQVAL1 = 201
+.          endif
+.        end for
+.        compute SUMVAL1 = SUMVAL1 + 1
+.      elseif (misnum(<3>) ge 0)  |has a missing value 0 or 1 OR 2 OR 3
+.        compute FREQVAL1 = misnum(<3>) + 202
+.      endif
+.   endif
+
+c date section
+.   ifthen (vtype(<2>, '<3>') eq 3 ) |Date
+.      compute SHORDATE = cdate(varget('<3>'), datemap(<2>, '<3>')) - today(0) - 35 + 200   |stores the number date from today add 200 because of varfreq range
+.      ifthen (exists(SHORDATE) eq 1)
+.          ifthen (SHORDATE lt -200)               |out of bottom range  (before today - 365)
+.             compute FREQVAL1 = -201
+.          elseif (SHORDATE gt 200)                   |out of top range (ie after today + 35)
+.             compute FREQVAL1 = 201
+.          else
+.             compute FREQVAL1 = SHORDATE
+.          endif
+.         compute SUMVAL1 = SUMVAL1 + 1  |just get the nonmissing total
+c      missing value check
+.      elseif (misnum(<3>) ge 0)  |has a missing value 0 or 1 OR 2 OR 3
+.         compute FREQVAL1 = misnum(<3>) + 202
+.      endif
+.   endif
+
+c time section
+.   ifthen (vtype(<2>, '<3>') eq 4 ) |time
+.      compute SHORTIME = numbr(timec(ctime(varget('<3>'), timemap(<2>, '<3>')), 'hh'))  |stores the hour
+.      ifthen (exists(SHORTIME) eq 1)
+.         compute FREQVAL1 = SHORTIME
+.         compute SUMVAL1 = SUMVAL1 + 1  |just get the nonmissing total
+c      missing value check
+.      elseif (misnum(<3>) ge 0)  |has a missing value 0 or 1 OR 2 OR 3
+.         compute FREQVAL1 = misnum(<3>) + 202
+.      endif
+.   endif
+
+
+c Integer
+.   ifthen (vtype(<2>, '<3>') eq 5)       |integer
+.     ifthen (numbr(varget('<3>')) ge -200 and le 200)
+.        compute FREQVAL1 = numbr(varget('<3>'))
+.        compute SUMVAL1 = SUMVAL1 + 1  |just get the nonmissing total
+.     elseif (numbr(varget('<3>')) lt -200)
+.        compute FREQVAL1  = -201
+.        compute SUMVAL1 = SUMVAL1 + 1  |just get the nonmissing total
+.     elseif (numbr(varget('<3>')) gt 200)
+.        compute FREQVAL1 = 201
+.        compute SUMVAL1 = SUMVAL1 + 1  |just get the nonmissing total
+c      missing value check
+.     elseif (misnum(<3>) ge 0)  |has a missing value 0 or 1 OR 2 OR 3
+.        compute FREQVAL1 = misnum(<3>) + 202
+.     endif
+.   endif
+
+c real (decimal) section
+.   ifthen (vtype(<2>, '<3>') eq 6 or 7)       |decimal
+.     ifthen (rnd(numbr(varget('<3>'))) ge -200 and le 200)
+.        compute FREQVAL1 = rnd(numbr(varget('<3>')))
+.        compute SUMVAL1 = SUMVAL1 + 1  |just get the nonmissing total
+.     elseif (rnd(numbr(varget('<3>'))) lt -200)
+.        compute FREQVAL1 = -201
+.        compute SUMVAL1 = SUMVAL1 + 1  |just get the nonmissing total
+.     elseif (rnd(numbr(varget('<3>'))) gt -200)
+.        compute FREQVAL1 = 201
+.        compute SUMVAL1 = SUMVAL1 + 1  |just get the nonmissing total
+c      missing value check
+.     elseif (misnum(<3>) ge 0)  |has a missing value 0 or 1 OR 2 OR 3
+.        compute FREQVAL1 = misnum(<3>) + 202
+.     endif
+.   endif
+
+c minimums and maximums
+.    ifthen (vtype(<2>, '<3>') eq 5 or 6 or 7) |numbers
+.      if ((exists(RECMIN1) eq 0) or (RECMIN1 gt rnd(numbr(varget('<3>')))))  compute RECMIN1 = rnd(numbr(varget('<3>')))
+.      if ((exists(RECMAX1) eq 0) or (RECMAX1 lt rnd(numbr(varget('<3>')))))  compute RECMAX1 = rnd(numbr(varget('<3>')))
+.    endif
+
+
+
+c VARIABLE 2
+
+
+c STRING variable
+.   ifthen (vtype(<2>, '<7>') eq 1)  |string
+.     ifthen (exists(<7>)) |NOT a missing value
+.       for NUMVALS# = 1, nvalid(<2>, '<7>')  |must cycle thru and get values instead of use "catint"
+.         ifthen (NUMVALS# le 200)
+.           if (svval ( <2>,  '<7>',  NUMVALS# )  eq varget('<7>')) compute FREQVAL2 = NUMVALS#
+.         elseif (NUMVALS# gt 200)
+.           if (svval ( <2>,  '<7>',  NUMVALS# ) eq varget('<7>')) compute FREQVAL2 = 201
+.         endif
+.       end for
+.       compute SUMVAL2 = SUMVAL2  +  1
+.     elseif (misnum(<7>) ge 0)  |has a missing value 0 or 1 OR 2 OR 3
+.       compute FREQVAL2 = misnum(<7>) + 202
+.     endif
+.   endif
+c catagorical variable
+.   ifthen (vtype(<2>, '<7>') eq 2)  |catagorical
+.     ifthen (exists(<7>)) |NOT a missing value
+.        for NUMVALS# = 1, nvalid(<2>, '<7>')  |must cycle thru and get values instead of use "catint"
+.          ifthen (NUMVALS# le 200)
+.            if (svval ( <2>,  '<7>',  NUMVALS# ) eq varget('<7>')) compute FREQVAL2 = NUMVALS#
+.          elseif (NUMVALS# gt 200)
+.            if (svval ( <2>,  '<7>',  NUMVALS# ) eq varget('<7>')) compute FREQVAL2 = 201
+.          endif
+.        end for
+.        compute SUMVAL2 = SUMVAL2 + 1
+.      elseif (misnum(<7>) ge 0)  |has a missing value 0 or  1 OR 2 OR 3
+.        compute FREQVAL2 = misnum(<7>) + 202
+.      endif
+.   endif
+
+c date section
+.   ifthen (vtype(<2>, '<7>') eq 3 ) |Date
+.      compute SHORDATE = cdate(varget('<7>'), datemap(<2>, '<7>')) - today(0) - 35 + 200   |stores the number date from today add 200 because of varfreq range
+.      ifthen (exists(SHORDATE) eq 1)
+.          ifthen (SHORDATE lt -200)               |out of bottom range  (before today-365)
+.             compute FREQVAL2 = -201
+.          elseif (SHORDATE gt 200)                   |out of top range (ie after today + 35)
+.             compute FREQVAL2 = 201
+.          else
+.             compute FREQVAL2 = SHORDATE
+.          endif
+.         compute SUMVAL2 = SUMVAL2 + 1  |just get the nonmissing total
+c      missing value check
+.      elseif (misnum(<7>) ge 0)  |has a missing value 0 or 1 OR 2 OR 3
+.         compute FREQVAL2 = misnum(<7>) + 202
+.      endif
+.   endif
+
+c time section
+.   ifthen (vtype(<2>, '<7>') eq 4 ) |time
+.      compute SHORTIME = numbr(timec(ctime(varget('<7>'), timemap(<2>, '<7>')), 'hh'))  |stores the hour
+.      ifthen (exists(SHORTIME) eq 1)
+.         compute FREQVAL2 = SHORTIME
+.         compute SUMVAL2 = SUMVAL2  +  1  |just get the nonmissing total
+c      missing value check
+.      elseif (misnum(<7>) ge 0)  |has a missing value 0 or 1 OR 2 OR 3
+.         compute FREQVAL2 = misnum(<7>) + 202
+.      endif
+.   endif
+
+c Integer
+.   ifthen (vtype(<2>, '<7>') eq  5)       |integer
+.     ifthen (numbr(varget('<7>')) ge -200 and le 200)
+.        compute FREQVAL2 = numbr(varget('<7>'))
+.        compute SUMVAL2  = SUMVAL2 + 1  |just get the nonmissing total
+.     elseif (numbr(varget('<7>')) lt -200)
+.        compute FREQVAL2  = -201
+.        compute SUMVAL2  = SUMVAL2 + 1  |just get the nonmissing total
+.     elseif (numbr(varget('<7>')) gt -200)
+.        compute FREQVAL2 = 201
+.        compute SUMVAL2 = SUMVAL2+1  |just get the nonmissing total
+c      missing value check
+.     elseif (misnum(<7>) ge 0)  |has a missing value 0 or 1 OR 2 OR 3
+.        compute FREQVAL2 = misnum(<7>) + 202
+.     endif
+.   endif
+
+c real (decimal) section
+.   ifthen (vtype(<2>, '<7>') eq 6 or 7)       |decimal
+.     ifthen (rnd(numbr(varget('<7>'))) ge -200 and le 200)
+.        compute FREQVAL2 = rnd(numbr(varget('<7>')))
+.        compute SUMVAL2 = SUMVAL2 + 1  |just get the nonmissing total
+.     elseif (rnd(numbr(varget('<7>'))) lt -200)
+.        compute FREQVAL2 = -201
+.        compute SUMVAL2 = SUMVAL2 + 1  |just get the nonmissing total
+.     elseif (rnd(numbr(varget('<7>'))) gt -200)
+.        compute FREQVAL2 = 201
+.        compute SUMVAL2 = SUMVAL2  + 1  |just get the nonmissing total
+c      missing value check
+.     elseif (misnum(<7>) ge 0)  |has a missing value 0 or 1 OR 2 OR 3
+.        compute FREQVAL2 = misnum(<7>) + 202
+.     endif
+.   endif
+
+c minimums and maximums
+.    ifthen (vtype(<2>, '<7>') eq 5 or 6 or 7) |numbers
+.      if ((exists(RECMIN2) eq 0) or (RECMIN2 gt rnd(numbr(varget('<7>')))))  compute RECMIN2 = rnd(numbr(varget('<7>')))
+.      if ((exists(RECMAX2) eq 0) or (RECMAX2 lt rnd(numbr(varget('<7>')))))  compute RECMAX2 = rnd(numbr(varget('<7>')))
+.    endif
+
+.    compute VARFREQ (FREQVAL1, FREQVAL2) = VARFREQ (FREQVAL1, FREQVAL2) + 1  |THE MOST IMPORTANT LINE IN THE PROGRAM
+| write varfreq(freqval1, freqval2) freqval1 freqval2
+.  end rec
+set item 1, format(COUNTED) + '/' + format(numrecs(<2>)) |SUMMARY
+cif eq 1,0<G_CASED>
+end cases
+cif end
+
+
+c Cross Tabs output
+
+c maximum and minimum found during process cases
+
+c VARIABLE 1
+. ifthen (exists(RECMIN1) eq 1)
+.   write (seach_html) [  '    <tr><td>Minimum #1: <strong>' +  format(RECMIN1) +  '</strong>  Maximum #1: <strong>'  + format(RECMAX1) + '</strong></td></tr>']
+. else
+.   write (seach_html)    '    <tr><td>Range was not found for #1</td></tr>'
+. endif
+c
+. ifthen (vtype(<2>, '<3>') eq 3 ) |Date
+.   write (seach_html) '    <tr><td>Dates are from today to 1 year ago. </td></tr>'
+. elseif (vtype(<2>, '<3>') eq 4 ) |time
+.   write (seach_html) '    <tr><td>Times are using a 24 hour clock rounding down to the nearest hour: </td></tr>'
+. elseif (vtype(<2>, '<3>') eq 6 or 7 ) |real (decimal)
+.   write (seach_html) '    <tr><td>Numbers were rounded to the nearest whole number: </td></tr>'
+. endif
+c
+. ifthen (exists(nmin(<2>, '<3>')) EQ 0) | No range was specified. Find it.
+.   ifthen (RECMIN1 GT -200 AND LE 200) | staying within the range of VARFREQ1 if a minimum was found
+.     compute VARMIN1 = RECMIN1
+.   elseif (RECMIN1 LT -200)
+      compute STR_1$ = 'Minimum value for <3> was less than -200. Only values above -200 will be shown'
+.     write (seach_html) '    <tr><td>'STR_1$'</td></tr>'
+.   elseif (RECMIN1 GT 200)
+      compute STR_1$ = 'Minimum value for <3> exceeded 200. Only values below 200 will be shown'
+.     write (seach_html) '    <tr><td>'STR_1$'</td></tr>'
+.   endif
+. endif
+
+. ifthen (exists(nmax(<2>, '<3>')) eq 0) | No Maximum was specified. Find it.
+.   ifthen (RECMAX1 GT -200 AND LE 200) |staying within the range of VARFREQ1
+.     compute VARMAX1 = RECMAX1
+.   elseif (RECMAX1 GT 200)
+.     compute VARMAX1 = 201
+.     compute STR_1$ = 'Maximum value for <3> exceed 200. Only values below 201 will be shown'
+.     write (seach_html) '    <tr><td>'STR_1$'</td></tr>'
+.   elseif (RECMAX1 LT -200)
+.     compute STR_1$ = 'Maximum value for <3> was below -200. Only values above 200 will be shown'
+.     write (seach_html) '    <tr><td>'STR_1$'</td></tr>'
+.   endif
+. endif
+write (seach_html) '  </table> '
+
+
+
+C VARIABLE 2
+. ifthen (exists(RECMIN2) eq 1)
+.   write (seach_html) [  '    <tr><td>Minimum#2: <strong>' +  format(RECMIN2) +  '</strong>  Maximum#2: <strong>'  + format(RECMAX2) + '</strong></td></tr>']
+. else
+.   write (seach_html)    '    <tr><td>Range was not found for #2</td></tr>'
+. endif
+
+. ifthen (vtype(<2>, '<7>') eq 3 ) |Date
+.   write (seach_html) '    <tr><td>Dates are from today to 1 year ago. </td></tr>'
+. elseif (vtype(<2>, '<7>') eq 4 ) |time
+.   write (seach_html) '    <tr><td>Times are using a 24 hour clock rounding down to the nearest hour: </td></tr>'
+. elseif (vtype(<2>, '<7>') eq 6 or 7 ) |real (decimal)
+.   write (seach_html) '    <tr><td>Numbers were rounded to the nearest whole number: </td></tr>'
+. endif
+
+. ifthen (exists(nmin(<2>, '<7>')) EQ 0) | No range was specified. Find it.
+.   ifthen (RECMIN2 GT -200 AND LE 200) | staying within the range of VARFREQ1 if a minimum was found
+.     compute VARMIN2 = RECMIN2
+.   elseif (RECMIN2 LT -200)
+      compute STR_1$ = 'Minimum value for <7> was less than -200. Only values above -200 will be shown'
+.     write (seach_html) '    <tr><td>'STR_1$'</td></tr>'
+.   elseif (RECMIN2 GT 200)
+      compute STR_1$ = 'Minimum value for <7> exceeded 200. Only values below 200 will be shown'
+.     write (seach_html) '    <tr><td>'STR_1$'</td></tr>'
+.   endif
+. endif
+
+. ifthen (exists(nmax(<2>, '<7>')) eq 0) | No Maximum was specified. Find it.
+.   ifthen (RECMAX2 GT -200 AND LE 200) |staying within the range of VARFREQ1
+.     compute VARMAX2 = RECMAX2
+.   elseif (RECMAX2 GT 200)
+.     compute VARMAX2 = 201
+.     compute STR_1$ = 'Maximum value for <7> exceed 200. Only values below 201 will be shown'
+.     write (seach_html) '    <tr><td>'STR_1$'</td></tr>'
+.   elseif (RECMAX2 LT -200)
+.     compute STR_1$ = 'Maximum value for <7> was below -200. Only values above 200 will be shown'
+.     write (seach_html) '    <tr><td>'STR_1$'</td></tr>'
+.   endif
+. endif
+
+
+
+. write (seach_html) '  </table> '
+
+
+c COLUMN HEADERS
+. write (seach_html) '  <hr>'
+. write (seach_html) '  <table border="1" CELLPADDING="10" CELLSPACING="0">'
+. write (seach_html) '    <tr><td>&nbsp</td><td align="center" bgcolor="#c3ffff" colspan = "' [VARMAX2 - VARMIN2 + 2 + MISSTOT1] '"><strong>'   [pack(varlabsc(<2>, '<7>'))] '</strong></td><td>&nbsp</td></tr>'
+. write (seach_html) '    <tr><td bgcolor="#ffffcc"><strong>' [pack(varlabsc(<2>, '<3>'))]'</strong></td>'
+. ifthen (vtype(<2>, '<3>') ne 3)
+.   for COLHEAD = VARMIN2, VARMAX2
+c       if (n eq miss(<2>, '<3>', 1) or miss(<2>, '<3>', 2) or miss(<2>, '<3>', 3))   next for  Try to fix.  Rule out missing values in list
+.     ifthen (COLHEAD eq -201)
+.       compute STR_1$ = '    <td bgcolor="#c3ffff"><b>' + format(COLHEAD) + '</b>'  +   ' '  +   vallabsc(<2>, '<7>', COLHEAD)  +  'and below</td>'
+.     elseif (COLHEAD eq 201)
+.       compute STR_1$ = '    <td bgcolor="#c3ffff"><b>'  +  format(COLHEAD)  +  '</b>'  +   ' '  +   vallabsc(<2>, '<7>', COLHEAD)  +  'and above</td>'
+.     elseif ((COLHEAD ge -200) and (COLHEAD le 200))
+.       compute STR_1$ = '    <td bgcolor="#c3ffff"><b>'  +  format(COLHEAD)  +  '</b>'  +   ' '  +   vallabsc(<2>, '<7>', COLHEAD)  +  '</td>'
+.     elseif (COLHEAD lt -201)
+.       compute COLHEAD = -201  |Lets hope I got this right and it should not be -202
+.     else
+.       exit for
+.     endif
+.     write (seach_html) STR_1$
+.   end for
+c   system missing column
+.   compute STR_1$ = '    <td bgcolor="#c3ffff"><b>blank</b></td>'
+.   write (seach_html) STR_1$
+c   user missing columns
+.   for NUMMISS# = 1,  3
+.     compute STR_1$ = '<b>' + miss(<2>, '<7>', NUMMISS#) + '</b>'
+.     ifthen (miss(<2>, '<7>', NUMMISS#) ne '')
+.       compute STR_1$ = STR_1$  +  ' '  +  vallabsc(<2>, '<7>',  miss(<2>, '<7>', NUMMISS#))
+.     else
+.       compute STR_1$ = STR_1$  +  '"Blank"'
+.     endif
+.     if (exists(STR_1$) eq 1) write (seach_html) '    <td bgcolor="#c3ffff">'STR_1$'</td>'
+.   end for
+.   write (seach_html) '    <td bgcolor="#ffffcc"><b>Totals</b></td>'  |Only write total at the end
+c   end of column headers
+
+
+C   THE DATA VALUES. Create a Row than move to the next row.
+.   compute SLAPGREG = 0
+.   compute WHICHROW = -1
+.   for XCOLUMNS = VARMIN1, VARMAX1
+.     write (seach_html) '    <tr>'
+.     compute WHICHROW = WHICHROW  +  1
+.     compute NEWROW = 0
+.     compute SUMROW = 0
+.     compute A_COLOR = A_COLOR + 1
+.     compute HTML_CLR = '#FFFFFF'
+.     if (A_COLOR eq 2) A_COLOR = 0; HTML_CLR ='#EAEAEA'
+.     for YROWS = VARMIN2,  VARMAX2
+| WRITE VARMIN2 VARMAX2 XCOLUMNS YROWS
+c       FIRST TIME, SHOW ROW HEADER FIRST
+.       ifthen(NEWROW eq  0)
+.         compute ROWLAB = VARMIN1  +  WHICHROW
+.         ifthen (ROWLAB eq -201)
+.           compute STR_1$ = '      <td bgcolor="#ffffcc">' +  '<b>' + format(XCOLUMNS) + '</b>' +  ' ' + vallabsc(<2>, '<3>', XCOLUMNS) + 'and below</td>'
+.         elseif (ROWLAB eq 201)
+.           compute STR_1$ = '      <td bgcolor="#ffffcc">' +  '<b>' + format(XCOLUMNS) + '</b>' +  ' ' + vallabsc(<2>, '<3>', XCOLUMNS) + 'and above</td>'
+.         elseif ((ROWLAB ge -200) and (ROWLAB le 200))
+.           compute STR_1$ = '      <td bgcolor="#ffffcc">' +  '<b>' + format(XCOLUMNS) + '</b>' +  ' ' + vallabsc(<2>, '<3>', XCOLUMNS) + '</td>'
+.         elseif (ROWLAB lt -201)
+.           if (SLAPGREG eq 0) display infobox "Please contact your ADMIN.  Results could not be calculated properly"
+.           compute SLAPGREG = 1
+.         else
+.           if (SLAPGREG eq 0) display infobox "Please contact your ADMIN.  Results could not be calculated properly"
+.           compute SLAPGREG = 1
+.         endif
+.         write (seach_html) STR_1$
+.         compute NEWROW = NEWROW  +  1
+.       endif
+.       write (seach_html) '      <td  align="right">' VARFREQ(XCOLUMNS, YROWS) '</td>'
+c     TOTALS ACROSS ROW
+.       SUMROW = SUMROW  +  VARFREQ(XCOLUMNS, YROWS)
+.     end for
+c     MISSINGS VALUES
+.     SUMROW = SUMROW  +  VARFREQ(XCOLUMNS, 202)  | system missing
+.     SUMROW = SUMROW  +  VARFREQ(XCOLUMNS, 203)  | User 1 missing
+.     SUMROW = SUMROW  +  VARFREQ(XCOLUMNS, 204)  | User 2 missing
+.     SUMROW = SUMROW  +  VARFREQ(XCOLUMNS, 205)  | User 3 missing
+.     write (seach_html) '      <td  align="right">' VARFREQ(XCOLUMNS, 202) '</td>'
+c     User Missings
+.     compute STR_1$ = SMISS
+.     for NUMMISS# = 1, 3
+.       compute STR_1$ = '<b>' + miss(<2>, '<7>', NUMMISS#) + '</b>'
+.       ifthen (miss(<2>, '<7>', NUMMISS#) ne 'BLANK')
+.         compute STR_1$ = format(VARFREQ(XCOLUMNS, 202 + NUMMISS#))
+.       elseif (miss(<2>, '<7>', NUMMISS#) ne '')
+.         compute STR_1$ = format(VARFREQ(XCOLUMNS, 202 + NUMMISS#))
+.       endif
+.       if (exists(STR_1$) = 1) write (seach_html) '    <td align="right">' STR_1$ '</td>'
+.     end for
+c     SUMS
+.     write (seach_html) '      <td  align="right"  bgcolor="#ffffcc">' SUMROW '</td>'
+.     write (seach_html) '    </tr>'
+.   end for
+
+
+c SYSTEM MISSING ROW
+.   compute SUMROW = 0
+.   write (seach_html) '    <tr><td bgcolor="#ffffcc"><b>Blank</b></td>'
+.   for YROWS = VARMIN2,  VARMAX2  |regular values
+.     write (seach_html) '      <td  align="right">' VARFREQ(202, YROWS) '</td>'
+.     SUMROW = SUMROW  +  VARFREQ(202, YROWS)
+.   end for
+.   write (seach_html) '      <td  align="right">' VARFREQ(202, 202) '</td>'  |var1 missing and var2 missing
+.   if (exists(miss(<2>, '<7>', 1)) eq 1) write (seach_html) '      <td  align="right">' VARFREQ(202, 203) '</td>'  |var1 missing and var2 missing
+.   if (exists(miss(<2>, '<7>', 2)) eq 1) write (seach_html) '      <td  align="right">' VARFREQ(202, 204) '</td>'  |var1 missing and var2 missing
+.   if (exists(miss(<2>, '<7>', 3)) eq 1) write (seach_html) '      <td  align="right">' VARFREQ(202, 205) '</td>'  |var1 missing and var2 missing
+.   SUMROW = SUMROW  +  VARFREQ(202, 202)
+.   SUMROW = SUMROW  +  VARFREQ(202, 203)
+.   SUMROW = SUMROW  +  VARFREQ(202, 204)
+.   SUMROW = SUMROW  +  VARFREQ(202, 205)
+.   write (seach_html) '      <td  align="right" bgcolor="#ffffcc">' SUMROW '</td>'
+.   write (seach_html) '    <tr>'
+
+
+c MISSINGS VALUES ROWS
+.   for YROWS = 203,  205
+.     compute SUMROW = 0
+.     compute STR_1$ = '<b>' + miss(<2>, '<3>', YROWS - 202) + '</b>'
+.     ifthen (miss(<2>, '<3>', YROWS - 202) ne '')
+.       compute STR_1$ = STR_1$ + ' ' + vallabsc(<2>, '<3>',  miss(<2>, '<3>', YROWS - 202))
+.     else |Blanks
+.       compute STR_1$ = STR_1$  +  '"Blank"'
+.     endif
+.     ifthen(exists(STR_1$) eq  1)
+.       write (seach_html) '    <td bgcolor="#ffffcc">' STR_1$ '</td>'  |Row label
+c       USER MISSINGS and  REAL VALUES
+.       for XCOLUMNS = VARMIN2, VARMAX2
+.         write (seach_html) '      <td  align="right">' VARFREQ(YROWS, XCOLUMNS) '</td>'
+.         SUMROW = SUMROW  +  VARFREQ(YROWS, XCOLUMNS)
+.       end for
+c       USER MISSINGS and  SYSTEM MISSING
+.       compute STR_1$ = '      <td  align="right">'  + format(VARFREQ(YROWS, 202)) + '</td>'
+.       SUMROW = SUMROW  +  VARFREQ(YROWS, XCOLUMNS)
+.       write (seach_html) STR_1$
+C       USER MISSING and USER MISSINGS
+.       for XCOLUMNS = 203, 205
+.         ifthen (miss(<2>, '<7>', XCOLUMNS - 202) eq '')
+.           SUMROW = SUMROW  +  VARFREQ(YROWS, XCOLUMNS)
+.           compute STR_1$ = '      <td  align="right">' + format(VARFREQ(YROWS, XCOLUMNS)) + '</td>'
+.           write (seach_html) STR_1$ |if (exists(STR_1$)=1)
+.         elseif (miss(<2>, '<7>', XCOLUMNS - 202) ne '')
+.           SUMROW = SUMROW  +  VARFREQ(YROWS, XCOLUMNS)
+.           compute STR_1$ = '      <td  align="right">' + format(VARFREQ(YROWS, XCOLUMNS)) + '</td>'
+.           write (seach_html) STR_1$ |if (exists(STR_1$) = 1)
+.         endif
+.       end for
+.     write (seach_html) '      <td align="right" bgcolor="#ffffcc">' SUMROW '</td>'
+.     write (seach_html) '    </tr>'
+.     endif
+.   end for
+
+c TOTALS: SUMDOWN COLUMN REAL VALUES
+.   write (seach_html) '    <tr><td bgcolor="#c3ffff"><b>Totals</b></td>'
+.   compute SUMTOT = 0
+.   for YROWS = VARMIN2,  VARMAX2
+.     compute SUMCOL = 0
+.     for XCOLUMNS = -201, 205
+.       compute SUMCOL = SUMCOL  +  VARFREQ(XCOLUMNS, YROWS)
+.     end for
+.     compute SUMTOT = SUMTOT  +  SUMCOL
+.     write (seach_html) '      <td align="right" bgcolor="#c3ffff">' SUMCOL'</td>'
+.   end for
+
+C TOTALS: USER MISSING
+.   compute SHOWMIS = 0  |REALLY Does not exists so don't show
+.   for YROWS = 202,  205
+.     compute SUMCOL = 0
+.     ifthen (YROWS eq 202)  |This is the only way to get this to be in the correct column
+.       for XCOLUMNS = -201, 205
+.         compute SUMCOL = SUMCOL  +  VARFREQ(XCOLUMNS, 202)
+.       end for
+.       compute SUMTOT = SUMTOT  +  SUMCOL
+.       write (seach_html) '    <td align="right" bgcolor="#c3ffff">'SUMCOL '</td>'
+.     elseif (miss(<2>, '<7>', YROWS - 202) eq 'BLANK') |HAS A MISSING VALUE DEFINED FOR THAT ONE
+.       for XCOLUMNS = -201, 205
+.           compute SUMCOL = SUMCOL  +  VARFREQ(XCOLUMNS, YROWS)
+.           compute SHOWMIS = 1
+.       end for
+.       compute SUMTOT = SUMTOT  +  SUMCOL
+.       if (SHOWMIS eq 1) write (seach_html) '    <td align="right" bgcolor="#c3ffff">' SUMCOL '</td>'
+.     elseif (exists(miss(<2>, '<7>', YROWS - 202)) eq 1) |HAS A MISSING VALUE DEFINED FOR THAT ONE
+.       for XCOLUMNS = -201, 205
+.           compute SUMCOL = SUMCOL  +  VARFREQ(XCOLUMNS, YROWS)
+.           compute SHOWMIS = 1
+.       end for
+.       compute SUMTOT = SUMTOT  +  SUMCOL
+.       if (SHOWMIS eq 1) write (seach_html) '    <td align="right" bgcolor="#c3ffff">' SUMCOL '</td>'
+.     endif
+.   end for
+.   write (seach_html) '      <td align="right" >'  SUMTOT '</td></tr>'
+
+
+c categorical variable 1
+. elseif (vtype(<2>, '<3>') eq 2)  |catagorical with less than 200 catagories
+.   for N = 1, nvalid(<2>, '<3>')
+.     ifthen (n le 200)
+.        compute STR_1$ = '<td><b>' + format(N) + '</b>' + ' ' + vallabsn(<2>, '<3>', N) + '</td>'
+.     else
+.        compute STR_1$ = '<td><b>' + format(N) + '</b>' + ' ' + vallabsn(<2>, '<3>', N) + 'and above</td>'
+.     endif
+.     execute subprocedure ADD_COLS
+.   end for
+
+.     write (seach_html) ['    <tr><td>Total Count</td><td align="right">' + format(SUMVAL1)  + '</td><td align="right">100% </td></tr>']
+c Date variable 1
+. elseif (vtype(<2>, '<3>') eq 3)  |Dates (using today to 1 year ago)
+.   ifthen (SUMVAL1 gt 0)  |returned some valid values  (ie rule out division by 0)
+.     for N = -201, 201
+.       ifthen (N lt -200)
+.          compute STR_1$ = 'Before 1 year ago'
+.       elseif (N gt 200)
+.          compute STR_1$ = 'After today'
+.       elseif (N lE 200 and ge (-200))
+.          compute STR_1$ = '<b>' + datec(today(0) - 165 + N, datemap(<2>, '<3>')) + '</b>'
+.       endif
+.       ifthen (VARFREQ (N, N) NE 0)  |just show the days that count helps weed out empty dates
+.         execute subprocedure ADD_COLS
+.       endif
+.     end for
+.   else
+.       compute STR_1$ = 'This variable has no data!'
+.     write (seach_html) '    <tr><td>' STR_1$ '</td></tr>'
+.   endif
+. endif
+c missing value variable 1
+
+. write (seach_html) '  </table>'
+. write (seach_html) '</table>'
+. write (seach_html) '</body>'
+. write (seach_html) '</html>'
+. close (seach_html)
+. compute DUMB_N# = help('file: "' + dsn('seach_html') + '"')
+
+subprocedure ADD_COLS
+. compute STR_1$ = STR_1$  +  '<td align="right">'  +  format(VARFREQ (N, N))  +  '</td>'
+. write (seach_html) STR_1$
+end subprocedure
+
+end retrieval
+END PROCEDURE

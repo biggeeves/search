@@ -1,0 +1,37 @@
+PROCEDURE      INCLUDES.SELECTOR:T  (157471,49196)  |Last amended Dec 04, 2013,13:39:56
+| Creator:   Greg Neils
+| Created:   August in 2008
+| Updated:   1/8/2009
+| Retired:
+| Called by: nothing
+| Calls:     Nothing
+| Reason:    Copy and paste where you need it.  GOLD STANDARD
+| Output:
+
+| SELECTION CRITERIA.  This is the gold standard for any copy and paste
+. ifthen ('<13>' ne 'GREG WAS HERE') |no selection criteria was specified
+.   compute PASSTEST = 0
+.   process rec <10>
+.     ifthen (vtype(<10>,'<11>') = 1)  |string
+.       if (varget('<11>') <12> '<13>')  PASSTEST =1
+.     elseif (vtype(<10>,'<11>') = 2)  |category
+.       if (varget('<11>') <12> '<13>')  PASSTEST =1
+.     elseif (vtype(<10>,'<11>') = 3)  |date
+.       if then (cdate(varget('<11>'),DATESTR) <12> cdate('<13>',DATESTR))
+.         PASSTEST =1
+.       endif
+.     elseif (vtype(<10>,'<11>') = 4)  |time
+.       if then (ctime(varget('<11>'),TIMESTR) <12> ctime('<13>',TIMESTR))
+.         PASSTEST =1
+.       endif
+.     else
+.       if (numbr(varget('<11>')) <12> numbr('<13>')) PASSTEST =1
+.     endif
+.     ifthen (exists(<11>) eq 0)
+.       if (misnum(<11>) = MISVALX) PASSTEST = 1       |They have already seen the alert "Missing values must use '='"
+.     endif
+.   end rec
+.   if (PASSTEST = 0) NEXT CASE  |All or nothing you might write~!
+. endif
+| end selection criteria
+END PROCEDURE

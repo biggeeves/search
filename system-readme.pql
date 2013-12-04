@@ -1,0 +1,14 @@
+PROCEDURE      SYSTEM.README:T  (157471,48519)  |Last amended Dec 04, 2013,13:28:39
+Created By Greg Neils
+
+To start search you need to define the search attribute first and then call the SYSTEM.START_UP member
+
+If the search attribute is not defined, it sill not work.
+
+For example:
+
+attribute SEARCH = "G:\DCC\WEBPROCF\web.srp"
+
+CALL SEARCH.SYSTEM.START_UP
+
+END PROCEDURE

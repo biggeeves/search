@@ -1,0 +1,105 @@
+PROCEDURE      INCLUDES.SPREAD:T  (157471,49809)  |Last amended Dec 04, 2013,13:50:09
+| Creator:   Greg Neils
+| Created:   2006
+| Updated:   2008
+| Reason:    Create an HTML table
+| Output:    HTML Table
+retrieval progress CRWARN
+print back noremarks nocommands
+integer *   1  RESVAR     | User responses
+integer *   4  ASKED
+integer *   4  ATCASE#    | To update main GUI Window
+integer *   4  TOCASE#    | To update main GUI Window
+string  *  20  SHOWBUSY   | To update main GUI Window
+integer *   1  A_COLOR    | 1= no color 2=color
+string  *  30  HTML_CLR   | #EAEAEA  OR #FFFFFF
+integer *   1  KEYS       | Cycle through the keys in a record
+integer *   1  KEY_YN     | Is a key
+integer *   1  DUMB_N#    | Helps open HTML browser
+string  *  50  START_TD
+integer *   4  TOOLONG2   | Has it been to long?  Maybe the user wants to cancel the program
+string  *  32  TXTVAR1    | 1st Variable name as text
+
+set ASKED ATCASE# A_COLOR (0)
+open seach_html   /write lrecl=600
+write (seach_html) '<html>'
+write (seach_html) '<head>'
+write (seach_html) '<title>'
+write (seach_html) 'Results for your search'
+write (seach_html) '</title>'
+write (seach_html) '</head>'
+write (seach_html) '<body>'
+write (seach_html) '<table border=1 width="100%"><tr><td>'
+write (seach_html) '  <table  width="100%" border=0 bgcolor="#FFFFCC">'
+write (seach_html) '    <tr><td><p><big>Generated on ' [datec(today(0),'mm/dd/yy')]  ' at ' [timec(now(0),'hh:mm')] 'by ' [sglobal('USERA')]  ' and the D.C.C.</big></p></td></tr>'
+write (seach_html) '    <tr><td><p><b><big>' [recname(<RECLIST>)] ': ' [recdoc(<RECLIST>,1)] '</big></b></p></td></tr>'
+write (seach_html) '    <tr><td><hr></td></tr>'
+write (seach_html) '  </table> '
+write (seach_html) '  <table border=1 CELLPADDING=10 CELLSPACING=0>'
+write (seach_html) '    <div><tr  bgcolor="#C4D4FC">'
+for XVARS = 1,nvarsc(<RECLIST>)
+. compute KEY_YN = 0
+. for KEYS = 1,nkeys(<RECLIST>) + 1 | look for Key variables... If KEY BOLD font.
+.   if (pack(varnamec(<RECLIST>,XVARS)) eq pack(keyname(<RECLIST>,KEYS))) compute KEY_YN = 1
+. end for
+. if then (KEY_YN eq 1)
+.   write (seach_html) '    <td bgcolor="#FFFFFF">  <strong> ' [varnamec(<RECLIST>,XVARS)] ' </strong></td>'
+. else
+.   write (seach_html) '    <td> ' [varnamec(<RECLIST>,XVARS)] '</td>'
+. end if
+end for
+write (seach_html) '    </tr><div>'
+compute TOCASE# = system(24)
+compute TOOLONG2 = now(0) +60 | 60 seconds
+
+cif eq 1,0<G_CASED>
+process cases | count = 100
+cif end
+. compute ATCASE# = ATCASE# + 1
+. compute SHOWBUSY = format(rnd(ATCASE#*100/TOCASE#))+'%'
+. set item 1, SHOWBUSY
+.   process rec <RECLIST>
+.     compute A_COLOR = A_COLOR + 1
+.     compute HTML_CLR = ''
+.     if (A_COLOR eq 2) A_COLOR=0; HTML_CLR =' bgcolor="#EAEAEA"'
+.     compute START_TD = '    <td '+ HTML_CLR+ '>'
+.     write (seach_html) '    <tr>'
+.     for XVARS = 1,nvarsc(<RECLIST>)
+.       compute TXTVAR1 = varnamec(<RECLIST>,XVARS)
+.       if then (exists(varget(TXTVAR1)) eq 0) |it MIGHT be a missing value.
+.         evaluate MISVAL = "misnum(" + trim(TXTVAR1) + ")"
+.         if then (exists(miss(<RECLIST>,TXTVAR1,MISVAL)) eq 1)
+.           write (seach_html) START_TD [miss(<RECLIST>,TXTVAR1,MISVAL)]'&nbsp;</td>'
+.         else
+.           write (seach_html) START_TD '&nbsp;</td>'
+.         end if
+.       else |NOT A MISSING VALUE
+.         write (seach_html) START_TD [varget(TXTVAR1)] '</td>'
+.       end if
+.     end for
+.     write (seach_html) '    </tr>'
+.   end rec
+. if then (now(0) > TOOLONG2)
+.   if then (ASKED=0)
+.     display yesnobox,'It has been over a minute. Do you want to continue?' response RESVAR
+.     if then (RESVAR =0)
+cif eq 1,0<G_CASED>
+.       exit cases
+cif end
+.     else
+.       compute ASKED=1
+.     end if
+.   end if
+. endif
+cif eq 1,0<G_CASED>
+end cases
+cif end
+if (numrecs(<RECLIST>) eq 0) write (seach_html) 'Currently there is no data.'
+write (seach_html) '  </table>'
+write (seach_html) '</table>'
+write (seach_html) '</body>'
+write (seach_html) '</html>'
+close (seach_html)
+compute DUMB_N# = help('file: "'+dsn('seach_html')+'"')
+end retrieval
+END PROCEDURE

@@ -1,0 +1,82 @@
+PROCEDURE      INCLUDES.ALL_RECS:T  (157471,50110)  |Last amended Dec 04, 2013,13:55:10
+program
+. integer * 1 NO YES
+. integer * 2 RECS# POS# MAXLEN# GLINE# NLINE#
+. string * 210 REC1$ REC2$ REC3$ REC4$ REC5$ REC6$
+. string * 210 NAME1$ NAME2$ NAME3$ NAME4$ NAME5$ NAME6$ NAME7$ NAME8$ NAME9$ NAME10$
+. set NO (0) GLINE# NLINE# YES (1) MAXLEN# (200)
+             REC1$ REC2$ REC3$ REC4$ REC5$ REC6$ NAME1$ NAME2$ NAME3$ NAME4$ NAME5$ NAME6$ NAME7$ NAME8$ NAME9$ NAME10$ ('')
+. RECS# = nrecs(0)
+. for REC# = 1,RECS#
+.  ifthen (exists(numrecs(REC#)) = YES)
+.   REC1$ to REC6$(GLINE#) = REC1$ to REC6$(GLINE#) + format(REC#) + ','
+.   if (len(REC1$ to REC6$(GLINE#)) > MAXLEN#) GLINE# = GLINE# + 1
+.   NAME1$ to NAME10$(NLINE#) = NAME1$ to NAME10$(NLINE#) + trim(recname(REC#)) + ','
+.   if (len(NAME1$ to NAME10$(NLINE#)) > MAXLEN#) NLINE# = NLINE# + 1
+.  endif
+. end for
+. REC1$ to REC6$(GLINE#) = sbst(REC1$ to REC6$(GLINE#),1,len(REC1$ to REC6$(GLINE#)) - 1)
+. NAME1$ to NAME10$(NLINE#) = sbst(NAME1$ to NAME10$(NLINE#),1,len(NAME1$ to NAME10$(NLINE#)) - 1)
+. x = dglobal('GRECN1')
+. x = dglobal('GRECN2')
+. x = dglobal('GRECN3')
+. x = dglobal('GRECN4')
+. x = dglobal('GRECN5')
+. x = dglobal('GRECN6')
+. x = dglobal('GRECN7')
+. x = dglobal('GRECN8')
+. x = globals('GRECN1',NAME1$)
+. ifthen (len(NAME2$) > 0)
+.  x = globals('GRECN2',NAME2$)
+.  ifthen (len(NAME3$) > 0)
+.   x = globals('GRECN3',NAME3$)
+.   ifthen (len(NAME4$) > 0)
+.    x = globals('GRECN4',NAME4$)
+.    ifthen (len(NAME5$) > 0)
+.     x = globals('GRECN5',NAME5$)
+.     ifthen (len(NAME6$) > 0)
+.      x = globals('GRECN6',NAME6$)
+.      ifthen (len(NAME7$) > 0)
+.       x = globals('GRECN7',NAME7$)
+.       ifthen (len(NAME8$) > 0)
+.        x = globals('GRECN8',NAME8$)
+.        ifthen (len(NAME9$) > 0)
+.         x = globals('GRECN9',NAME9$)
+.         ifthen (len(NAME10$) > 0)
+.          x = globals('GRECN10',NAME10$)
+.         endif
+.        endif
+.       endif
+.      endif
+.     endif
+.    endif
+.   endif
+.  endif
+. endif
+. x = dglobal('GREC1')
+. x = dglobal('GREC2')
+. x = dglobal('GREC3')
+. x = dglobal('GREC4')
+. x = dglobal('GREC5')
+. x = dglobal('GREC6')
+. x = globals('GREC1',REC1$)
+. ifthen (len(REC2$) > 0)
+.  x = globals('GREC2',REC2$)
+.  ifthen (len(REC3$) > 0)
+.   x = globals('GREC3',REC3$)
+.   ifthen (len(REC4$) > 0)
+.    x = globals('GREC4',REC4$)
+.    ifthen (len(REC5$) > 0)
+.     x = globals('GREC5',REC5$)
+.     ifthen (len(REC6$) > 0)
+.      x = globals('GREC6',REC6$)
+.     endif
+.    endif
+.   endif
+.  endif
+. endif
+. x = globals('GCASE',trim(keyname(0,1)))
+. x = globals('GDBNAME',trim(dbname(0)))
+. x = globals('GDBPATH',dsn('prefix'))
+end program
+END PROCEDURE

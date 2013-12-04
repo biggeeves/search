@@ -1,0 +1,29 @@
+PROCEDURE      SYSTEM.START_UP:T  (157471,49412)  |Last amended Dec 04, 2013,13:43:32
+c This program checks that the search attribute has been defined.  If so, it starts up the search.
+c note that some output folders will be created for the user.
+
+
+GLOBAL SEARCH_CONTINUE = 0
+
+program
+INTEGER * 1 PASS_TEST
+INTEGER * 1 DUMMY
+. for EACH_ATTRIBUTE = 1, SYSTEM(52)
+.   IF ( trim( upper( attrname( EACH_ATTRIBUTE ) ) ) EQ 'SEARCH' ) DUMMY = GLOBALN( 'SEARCH_CONTINUE' ,1 )
+. end for
+end program
+
+
+CIF EQ 0,0<SEARCH_CONTINUE>
+
+. PROGRAM
+.   DISPLAY INFOBOX "SEARCH ATTRIBUTE MUST BE DEFINED BEFORE RUNNING PROGRAM.  EXITING."
+. END PROGRAM
+
+CIF FALSE
+
+. CALL SEARCH.INCLUDES.GEN_DB_INI
+. CALL SEARCH.DIALOGS.GENERAL
+
+CIF END
+END PROCEDURE

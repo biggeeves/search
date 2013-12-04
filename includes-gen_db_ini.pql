@@ -1,0 +1,45 @@
+PROCEDURE      INCLUDES.GEN_DB_INI:T  (157471,50088)  |Last amended Dec 04, 2013,13:54:48
+| Creator:   Greg Neils
+| Created:   02/20/2009
+| Reason:    Set up parts of the users environment
+
+program crwarn
+. string  * 100  TESTGLOB   | Does that global exist?
+. integer *   1  DUMB_N#    | Cycle thru globals
+. string  * 300  USER_FOL   | What is the output folder for the user
+. integer *   1  CHK_DIR    | does the directory exists
+
+| set the output folder, and create it if necessary
+| add the username to the path
+. USER_FOL = dsn('PREFIX') + 'USERS\'
+. if (fileis(USER_FOL) eq 0) CHK_DIR = makedir(USER_FOL) | NOT A DIRECTORY OR A FILE
+. if (CHK_DIR eq -1) write 'Can not make user directory'
+. USER_FOL = USER_FOL + sglobal('USERA') +'\'
+. if (fileis(USER_FOL) eq 0) CHK_DIR = makedir(USER_FOL) | NOT A DIRECTORY OR A FILE
+. if (CHK_DIR eq -1) write 'Can not make user directory'
+. DUMB_N# = setdir(USER_FOL)    | set user folder as the default folder for this user
+
+| Define BASIC output Folders.
+. execute dbms ["attribute seach_html filename='" + dsn('prefix')+ "USERS\Report"+getenv('username')+".html'"]
+. execute dbms ["attribute seach_pql filename='" + dsn('prefix')+ "USERS\Report"+getenv('username')+".pql'"]
+. execute dbms ["attribute search_wait filename='" + dsn('prefix')+ "USERS\wait"+getenv('username')+".pql'"]
+| CORRECT the above attribute if possible to the global USERA folder
+. for DUMB_N# = 1,system(53)
+.   TESTGLOB = pack(globname(DUMB_N#))
+.   ifthen (TESTGLOB = 'USERA')  | IE... USERA has been set and it is OK to use.  If it has not been set, then this is a bad idea.
+.     ifthen (len(sglobal('USERA')) gt 0)
+.       execute dbms ["attribute seach_html filename='" + dsn('prefix')+ "USERS\" + sglobal('USERA') +"\Report"+ sglobal('USERA') +".html'"]
+.       execute dbms ["attribute seach_pql filename='" + dsn('prefix')+ "USERS\" + sglobal('USERA') +"\Report"+ sglobal('USERA') +".pql'"]
+.       execute dbms ["attribute search_wait filename='" + dsn('prefix')+ "USERS\" + sglobal('USERA') +"\wait"+ sglobal('USERA') +".pql'"]
+.       exit for
+.     endif
+.   endif
+. end for
+. DUMB_N# =  globaln ('G_CASED',dbtype(0))
+
+end program
+
+call SEARCH.INCLUDES.ALL_RECS  | SETS RECORD GLOBALS
+
+call SYSPROC.TOOLS.HTMLCODE  |sets html globals
+END PROCEDURE

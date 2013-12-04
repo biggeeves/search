@@ -1,0 +1,183 @@
+PROCEDURE      INCLUDES.FILEBYNAME:T  (157471,49707)  |Last amended Dec 04, 2013,13:48:27
+c
+c Subroutine to search files by name (including wilcards)
+c
+c program
+C COPIED FROM TOM SHRIVERS EXCELLENT "dvprocf.dvtools.filebynm "
+
+
+subroutine SEARCH.INCLUDES.FILEBYNAME (startdir,filepatt, srchpatt,
+                                      casemode,
+                                      dirpath)
+                          returning (filesfnd, linesfnd)
+                         /replace /nodatabase
+                       | /debug
+
+string * 250 array tree  ( 100)
+c string * 250 array files (1000)
+string * 250 currdir inidir destdir newdir fn$ ufn$ destfn$ startdir
+integer *  4 treepos currpos dir# f# treesize nfiles file# filetp#
+
+string * 256 a256
+string * 250 fline uline
+string *  50 filepatt srchpatt
+integer  * 4 cnt fsize instat outstat filesfnd linesfnd
+integer  * 1 casemode dirpath
+integer  * 4 linenumber   | linen umber inthe file that is searched
+
+value labels casemode (0)"Case Insensitive" (1)"Case Sensitive"      /
+             dirpath  (0)"Specified Folder" (1)"Folder & Subfolders" /
+
+C toms test on local machine
+c startdir="c:\mnyr\"
+c filepatt=".sr1"
+c casemode=0
+c dirpath =1
+
+. treesize=  100
+. nfiles  = 1000
+
+C . window clear
+
+. ifnotthen(len(trim(srchpatt)))
+.   ccc display errorbox "Search Pattern not Specified"
+.   ccc set filesfnd linesfnd(-1)
+.   ccc return
+. endif
+
+. casemode  = fst(casemode,0)                   | insensitive if missing
+. dirpath   = fst(dirpath ,1)                   | subfolders if missing
+. ifnot(len(trim(startdir)))startdir=curdir(0)
+
+. filepatt  = '@'+upper(filepatt)+'@'
+. if(casemode=0)srchpatt='@'+upper(srchpatt)+'@'
+. srchpatt=replace(srchpatt,'*' ,'@',9,1,0)
+. srchpatt=replace(srchpatt,'@@','@',9,1,0)
+
+. set filesfnd linesfnd file# filetp# currpos(0)
+. currdir   = startdir
+. inidir    = currdir
+. dir#      = 1
+. compute tree(dir#)= currdir
+
+cif eq 1,2
+. write "Folder:   " startdir /
+        "FilePatt: " filepatt /
+        "SrchPatt: " srchpatt /
+        "CaseMode: " [vallab(casemode)] /
+        "DirPath.: " [vallab(dirpath)]
+cif end
+
+. while (currpos lt dir#)
+.   execute subprocedure growtree
+. end while
+
+cif eq 1,2
+write "End- dir#:  " dir# /
+      "Tot- file#: " file# /
+      "Matches:    " filesfnd /
+cif end
+c execute subprocedure showtree
+
+c
+cif eq 1,1
+subprocedure search
+. ufn$=upper(fn$)
+
+. ifnotthen(len(trim(filepatt))   )continue   | all files
+. elseifnot(pattern(ufn$,filepatt))jump outp
+. endif
+
+. filetp#=filetp#+1
+c write filetp#(i4) 1x fn$
+c jump outp
+
+. open fil read /dsnvar=fn$ /lrecl=200
+. linenumber = 0
+. loop
+.   read(fil,err=err)fline(a200)
+.   uline=upper(trim(fline))
+.   linenumber = linenumber +1
+.   ifthen(pattern(uline,srchpatt))
+.     write (seach_html DYNAMIC)  '    <tr>'
+.     write (seach_html DYNAMIC) '    <td>'fn$'</td><td>' linenumber '</td><td>' uline '</td>'
+.     write (seach_html DYNAMIC)'    </tr>'
+.     filesfnd=filesfnd+1
+.     linesfnd=linesfnd+1
+.   endif
+. end loop
+err:
+close fil
+
+outp:
+end subprocedure
+cif end
+c
+subprocedure growtree
+. currpos=currpos+1
+. currdir=tree(currpos)
+
+. for f#=1,filecnt(currdir+'*.*')
+.   fn$=currdir+filen(currdir+'*.*',f#)
+.   ifthen(fileis(fn$)=-1)                    | if a folder
+.     if(sbst(reverse(fn$),1,1)='.')next for
+
+.     keepit:
+.     dir#=dir#+1;compute tree(dir#)=fn$+'\'
+c     c if(amod(dir#,100)=0)write dir# currpos(i5) 1x fn$
+.     ifthen(dir#=treesize) | increase array size if needed
+.       treesize=treesize+250
+.       redefine array "tree" (treesize)
+.     endif
+.   else                                      | if a file
+.     file#=file#+1
+.     ufn$=upper(fn$)
+.     ifnot(pattern(ufn$,filepatt))exit if
+.     filesfnd=filesfnd+1
+c     display the found file
+c .     write filesfnd file# (i6) 1x fn$
+.     ifthen(file#=nfiles)                    | increase array size if needed
+.       nfiles=nfiles+100
+.       c redefine array "files" (nfiles)
+.     endif
+.     c files(file#)=fn$
+
+.     execute subprocedure search
+
+.   endif
+. end for
+end subprocedure
+c
+subprocedure cleanhtml
+. uline= replace(uline,'<',' ',99,1,0)
+. uline= replace(uline,'|',' ',99,1,0)
+. uline= replace(uline,'>',' ',99,1,0)
+. uline= replace(uline,'/',' ',99,1,0)
+. uline= replace(uline,"'",' ',99,1,0)
+. uline= replace(uline,'"',' ',99,1,0)
+. uline= pack(uline)
+
+end subprocedure
+c
+subprocedure showtree
+cif eq 1,2
+. for f#=1,dir#
+.     write f#(i4) 1x tree(f#)
+. end for
+cif end
+end subprocedure
+c
+subprocedure makedir
+cif eq 1,2
+. for f#=1,dir#
+.   newdir=replace(tree(f#),inidir,destdir,1,1,0)
+.   newdir=sbst(newdir,1,len(newdir)-1)
+.   x=makedir(newdir)
+.   c write f#(i4) 1x tree(f#) 60t newdir
+. end for
+cif end
+end subprocedure
+c
+end program
+
+END PROCEDURE
